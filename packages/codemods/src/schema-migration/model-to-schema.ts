@@ -3,6 +3,32 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
 import type { SchemaField, TransformArtifact, TransformOptions } from './utils/ast-utils.js';
+
+/**
+ * Determines if an AST node represents object method syntax that doesn't need key: value format
+ * This is used for class methods that become extension object methods
+ */
+function isClassMethodSyntax(methodNode: SgNode): boolean {
+  const methodKind = methodNode.kind();
+
+  // Method definitions are always object methods in extensions
+  if (methodKind === 'method_definition') {
+    return true;
+  }
+
+  // Field definitions that are functions/arrow functions
+  if (methodKind === 'field_definition') {
+    const value = methodNode.field('value');
+    if (value) {
+      const valueKind = value.kind();
+      if (valueKind === 'arrow_function' || valueKind === 'function') {
+        return false; // These need key: value syntax in extensions
+      }
+    }
+  }
+
+  return false;
+}
 import {
   buildLegacySchemaObject,
   convertToSchemaFieldWithNodes,
