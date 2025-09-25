@@ -1,6 +1,6 @@
 import { parse, type SgNode } from '@ast-grep/napi';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import type { SchemaField, TransformArtifact, TransformOptions } from './utils/ast-utils.js';
 
