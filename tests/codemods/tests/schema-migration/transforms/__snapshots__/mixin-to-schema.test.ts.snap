@@ -164,6 +164,27 @@ exports[`mixin-to-schema transform (artifacts) > basic functionality > converts 
 ]
 `;
 
+exports[`mixin-to-schema transform (artifacts) > basic functionality > generates empty trait for empty mixin > empty mixin metadata 1`] = `
+[
+  {
+    "name": "emptyTrait",
+    "suggestedFileName": "empty.schema.js",
+    "type": "trait",
+  },
+  {
+    "name": "EmptyTrait",
+    "suggestedFileName": "empty.schema.types.ts",
+    "type": "trait-type",
+  },
+]
+`;
+
+exports[`mixin-to-schema transform (artifacts) > basic functionality > generates empty trait for empty mixin > empty trait type code 1`] = `
+"export interface EmptyTrait {
+}
+"
+`;
+
 exports[`mixin-to-schema transform (artifacts) > basic functionality > preserves newlines and tabs in extension artifact properties without escaping > code 1`] = `
 "export const plannableTrait = {
   "name": "plannable",

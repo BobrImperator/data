@@ -981,13 +981,13 @@ export default class AdminModel extends Model.extend(ConnectedMixin) {
     await runMigration({...options, verbose: true});
 
     // Check that schema and type files are colocated in resources
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.js'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.ts'))).toBe(true);
     expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.js'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.ts'))).toBe(true);
     expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.types.ts'))).toBe(true);
 
     // Check that trait and trait-type files are colocated in traits
-    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.js'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.ts'))).toBe(true);
     expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.types.ts'))).toBe(true);
   });
 
@@ -1077,11 +1077,11 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
     // Run migration
     await runMigration(options);
 
-    // Check that all schema files are .js regardless of source
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.js'))).toBe(true);
+    // Check that schema files preserve source extension (.js or .ts)
+    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.js'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.schema.ts'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.schema.js'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.schema.ts'))).toBe(true);
 
     // Check that all type files are .ts regardless of source extension
     expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.types.ts'))).toBe(true);
@@ -1091,6 +1091,6 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
 
     // Check that extension files preserve source extension
     expect(existsSync(join(tempDir, 'app/data/extensions/js-model-with-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions/ts-mixin.js'))).toBe(true); // Extension from TS mixin
+    expect(existsSync(join(tempDir, 'app/data/extensions/ts-mixin.ts'))).toBe(true);
   });
 });
