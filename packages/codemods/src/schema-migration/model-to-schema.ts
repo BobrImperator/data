@@ -860,7 +860,6 @@ function generateIntermediateModelTraitArtifacts(
 
   // For intermediate model traits, we need to add the `id` property from the Model base class
   // to the type chain. We add this to all traits since it's inherited from Model.
-  // Note: We don't add `store` because the Store type is application-specific.
   // Only add if not already present from schema fields
   const hasId = traitFieldTypes.some((f) => f.name === 'id');
 
@@ -872,6 +871,20 @@ function generateIntermediateModelTraitArtifacts(
       readonly: false, // id can be set on new records
     });
     debugLog(options, `DEBUG: Added id property to ${traitName} trait`);
+  }
+
+  // Add `store` property if storeType is configured
+  // The Store type is application-specific, so it must be explicitly configured
+  const hasStore = traitFieldTypes.some((f) => f.name === 'store');
+
+  if (!hasStore && options?.storeType) {
+    const storeTypeName = options.storeType.name || 'Store';
+    traitFieldTypes.push({
+      name: 'store',
+      type: storeTypeName,
+      readonly: true, // store is injected and should not be modified
+    });
+    debugLog(options, `DEBUG: Added store property with type ${storeTypeName} to ${traitName} trait`);
   }
 
   // Collect imports for trait interface
@@ -920,6 +933,14 @@ function generateIntermediateModelTraitArtifacts(
         : `type { ${otherTraitTypeName} } from './${trait}.schema.types'`;
       traitImports.add(traitImport);
     });
+  }
+
+  // Add Store type import if storeType is configured
+  if (options?.storeType) {
+    const storeTypeName = options.storeType.name || 'Store';
+    const storeImport = `type { ${storeTypeName} } from '${options.storeType.import}'`;
+    traitImports.add(storeImport);
+    debugLog(options, `DEBUG: Added Store type import: ${storeImport}`);
   }
 
   // Determine extends clause for trait interface

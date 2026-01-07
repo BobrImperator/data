@@ -57,6 +57,13 @@ export interface TransformOptions {
   inputDir?: string;
   /** Output directory for generated schema files (default: './app/schemas') */
   outputDir?: string;
+  /** Configuration for the Store type to include in generated intermediate model traits */
+  storeType?: {
+    /** Name of the Store type (default: 'Store') */
+    name?: string;
+    /** Import path for the Store type (e.g., 'soxhub-client/services/store') */
+    import: string;
+  };
 }
 
 /**

@@ -155,6 +155,22 @@
     "prettierConfigPath": {
       "type": "string",
       "description": "Path to Prettier configuration file (optional, uses project defaults)"
+    },
+    "storeType": {
+      "type": "object",
+      "description": "Configuration for the Store type to include in generated intermediate model traits. If not specified, store property is not added to traits.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the Store type (e.g., 'Store')",
+          "default": "Store"
+        },
+        "import": {
+          "type": "string",
+          "description": "Import path for the Store type (e.g., 'soxhub-client/services/store')"
+        }
+      },
+      "required": ["import"]
     }
   },
   "additionalProperties": false
