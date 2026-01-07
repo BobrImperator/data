@@ -1,7 +1,7 @@
 import { parse } from '@ast-grep/napi';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
-import { basename, dirname, extname, join, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 
 import { processIntermediateModelsToTraits } from './model-to-schema.js';
 import type { TransformOptions } from './utils/ast-utils.js';
@@ -263,10 +263,6 @@ function getArtifactOutputPath(
         ? artifact.suggestedFileName || 'unknown-extension.ts'
         : artifact.suggestedFileName?.replace(/\.(js|ts)$/, '.schema.types.ts') || 'unknown-extension-type.ts';
     outputPath = join(resolve(outputDir), outputName);
-  } else if (artifact.type === 'resource-type') {
-    // Resource type interfaces go to resourcesDir
-    outputDir = finalOptions.resourcesDir || './app/data/resources';
-    outputPath = join(resolve(outputDir), artifact.suggestedFileName || 'unknown-resource-type.ts');
   } else if (artifact.type === 'resource-type-stub') {
     // Resource type stubs go to resourcesDir like other resource types
     debugLog(finalOptions, `RESOURCE-TYPE-STUB: redirecting to resources dir`);
@@ -737,8 +733,8 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
           if (finalOptions.verbose) {
             logger.info(`📋 Found ${additionalModelFiles.length} additional model files from ${source.pattern}`);
           }
-        } catch (error) {
-          logger.error(`Failed to process additional model source ${source.pattern}: ${error}`);
+        } catch (error: unknown) {
+          logger.error(`Failed to process additional model source ${source.pattern}: ${String(error)}`);
         }
       }
     }
@@ -810,10 +806,6 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   const fileSourceCache = new Map<string, string>();
 
   for (const file of filesToProcess) {
-    // Add debug for client-core files
-    if (file.includes('client-core')) {
-    }
-
     try {
       const source = readFileSync(file, 'utf-8');
       fileSourceCache.set(file, source);
@@ -985,8 +977,6 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   // Process model files individually using the model transform
   for (const filePath of modelFiles) {
     try {
-      if (filePath.includes('client-core')) {
-      }
       if (finalOptions.verbose) {
         logger.debug(`🔄 Processing: ${filePath}`);
       }

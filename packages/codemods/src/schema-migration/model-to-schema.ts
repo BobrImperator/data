@@ -1,6 +1,6 @@
 import { parse, type SgNode } from '@ast-grep/napi';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import type { SchemaField, TransformArtifact, TransformOptions } from './utils/ast-utils.js';
 import {
@@ -591,8 +591,11 @@ function generateRegularModelArtifacts(
         case 'hasMany':
           type = getTypeScriptTypeForHasMany(field, options);
           break;
-        default:
+        case 'schema-object':
+        case 'schema-array':
+        case 'array':
           type = 'unknown';
+          break;
       }
 
       return {
@@ -750,91 +753,6 @@ export class ${extensionClassName} extends Base {`
   return artifacts;
 }
 
-/**
- * Generate basic artifacts for external models that passed initial categorization
- * but failed detailed analysis
- */
-function generateArtifactsFromMinimalAnalysis(
-  filePath: string,
-  source: string,
-  analysis: ModelAnalysisResult,
-  options: TransformOptions
-): TransformArtifact[] {
-  const {
-    schemaFields,
-    extensionProperties,
-    mixinTraits,
-    mixinExtensions,
-    modelName,
-    baseName,
-    defaultExportNode,
-    isFragment,
-  } = analysis;
-
-  // Parse the source to get the root node for class detection
-  const language = getLanguageFromPath(filePath);
-  const ast = parse(language, source);
-  const root = ast.root();
-
-  const artifacts: TransformArtifact[] = [];
-
-  // Always create a schema artifact (even if it only has traits/extensions from mixins)
-  const schemaName = `${modelName}Schema`;
-  const code = generateSchemaCode(
-    schemaName,
-    baseName,
-    schemaFields,
-    mixinTraits,
-    mixinExtensions,
-    source,
-    defaultExportNode ?? null,
-    root,
-    isFragment
-  );
-  // Determine the file extension based on the original model file
-  const originalExtension = filePath.endsWith('.ts') ? '.ts' : '.js';
-
-  artifacts.push({
-    type: 'schema',
-    name: schemaName,
-    code,
-    suggestedFileName: `${baseName}.schema${originalExtension}`,
-  });
-
-  // Create schema type interface
-  const schemaInterfaceName = `${modelName}`;
-
-  // Collect imports needed for schema interface
-  const schemaImports = new Set<string>();
-
-  // Collect schema field types - start with [Type] symbol
-  const schemaFieldTypes = [
-    {
-      name: '[Type]',
-      type: `'${baseName.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}'`,
-      readonly: true,
-    },
-  ];
-
-  // Collect schema field types
-  const commonImports = generateCommonWarpDriveImports(options);
-  schemaImports.add(commonImports.typeImport);
-
-  // Create type artifact
-  const schemaTypeArtifact = createTypeArtifact(
-    baseName,
-    schemaInterfaceName,
-    schemaFieldTypes,
-    'resource',
-    '', // No extends clause for minimal analysis
-    Array.from(schemaImports),
-    '.ts' // Type files should always be .ts regardless of source file extension
-  );
-  artifacts.push(schemaTypeArtifact);
-
-  return artifacts;
-}
-
 export function toArtifacts(filePath: string, source: string, options: TransformOptions): TransformArtifact[] {
   debugLog(options, `=== DEBUG: Processing ${filePath} ===`);
 
@@ -887,11 +805,6 @@ function generateIntermediateModelTraitArtifacts(
     return [];
   }
 
-  // Parse the source to get the root node for type name mapping extraction
-  const language = getLanguageFromPath(filePath);
-  const ast = parse(language, source);
-  const root = ast.root();
-
   const { schemaFields, extensionProperties, mixinTraits, defaultExportNode } = analysis;
   debugLog(
     options,
@@ -931,8 +844,11 @@ function generateIntermediateModelTraitArtifacts(
       case 'hasMany':
         type = getTypeScriptTypeForHasMany(field, options);
         break;
-      default:
+      case 'schema-object':
+      case 'schema-array':
+      case 'array':
         type = 'unknown';
+        break;
     }
 
     return {
@@ -1096,7 +1012,7 @@ function getIntermediateModelLocalNames(
         if (sourceText.startsWith('./') || sourceText.startsWith('../')) {
           try {
             // Use the same path resolution logic as in the isModelFile fix
-            const resolvedPath = require('path').resolve(require('path').dirname(fromFile), sourceText);
+            const resolvedPath = resolve(dirname(fromFile), sourceText);
 
             // Check if the resolved path corresponds to the configured intermediate model path
             // by checking if it ends with the same pattern as the configured path
@@ -1104,11 +1020,11 @@ function getIntermediateModelLocalNames(
             const possiblePaths = [`${resolvedPath}.ts`, `${resolvedPath}.js`, resolvedPath];
 
             for (const possiblePath of possiblePaths) {
-              if (require('fs').existsSync(possiblePath)) {
+              if (existsSync(possiblePath)) {
                 // Check if this resolved path matches the expected intermediate model
                 if (possiblePath.includes(expectedFilePath)) {
                   try {
-                    const content = require('fs').readFileSync(possiblePath, 'utf8');
+                    const content = readFileSync(possiblePath, 'utf8');
                     // Verify it's actually a model file
                     const isModel = isModelFile(possiblePath, content, options);
                     if (isModel) {
@@ -1121,7 +1037,7 @@ function getIntermediateModelLocalNames(
                         }
                       }
                     }
-                  } catch (error) {
+                  } catch {
                     // Continue checking other possibilities
                   }
                 }
@@ -1130,7 +1046,7 @@ function getIntermediateModelLocalNames(
             }
 
             if (localName) break;
-          } catch (error) {
+          } catch {
             // Continue checking other imports
           }
         }
@@ -1152,8 +1068,6 @@ function getIntermediateModelLocalNames(
 function getIntermediateFragmentLocalNames(root: SgNode, options: TransformOptions, fromFile: string): string[] {
   const localNames: string[] = [];
   const intermediateFragmentPaths = options.intermediateFragmentPaths || [];
-  const path = require('path');
-  const fs = require('fs');
 
   for (const fragmentPath of intermediateFragmentPaths) {
     // First try direct matching
@@ -1192,7 +1106,7 @@ function getIntermediateFragmentLocalNames(root: SgNode, options: TransformOptio
         // Check if this is a relative import that could be our intermediate fragment
         if (sourceText.startsWith('./') || sourceText.startsWith('../')) {
           try {
-            const resolvedPath = path.resolve(path.dirname(fromFile), sourceText);
+            const resolvedPath = resolve(dirname(fromFile), sourceText);
 
             // Normalize the configured path to check against
             // fragmentPath could be like "codemod/models/base-fragment" or "app/fragments/base-fragment"
@@ -1203,7 +1117,7 @@ function getIntermediateFragmentLocalNames(root: SgNode, options: TransformOptio
             const possiblePaths = [`${resolvedPath}.ts`, `${resolvedPath}.js`, resolvedPath];
 
             for (const possiblePath of possiblePaths) {
-              if (fs.existsSync(possiblePath)) {
+              if (existsSync(possiblePath)) {
                 const normalizedPossiblePath = possiblePath.replace(/\\/g, '/');
 
                 // Check if the resolved path ends with the configured fragment path
@@ -1258,8 +1172,8 @@ function getIntermediateFragmentLocalNames(root: SgNode, options: TransformOptio
             }
 
             if (localName) break;
-          } catch (error) {
-            debugLog(options, `DEBUG: Error resolving intermediate fragment path: ${error}`);
+          } catch (error: unknown) {
+            debugLog(options, `DEBUG: Error resolving intermediate fragment path: ${String(error)}`);
           }
         }
       }

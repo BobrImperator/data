@@ -204,7 +204,6 @@ export function toArtifacts(filePath: string, source: string, options: Transform
         isIdentifierInitializedByMixinCreate(root, exportedIdentifier, mixinImportLocal, options)
       ) {
         ok = true;
-      } else {
       }
     }
 
@@ -350,8 +349,8 @@ export function toArtifacts(filePath: string, source: string, options: Transform
     if (extendedTraits.length > 0) {
       const traitsImport = options?.traitsImport || 'soxhub-client/data/traits';
       for (const trait of extendedTraits) {
-        const traitInterfaceName = `${toPascalCase(trait)}Trait`;
-        imports.add(`type { ${traitInterfaceName} } from '${traitsImport}/${trait}.schema.types'`);
+        const extendedTraitName = `${toPascalCase(trait)}Trait`;
+        imports.add(`type { ${extendedTraitName} } from '${traitsImport}/${trait}.schema.types'`);
       }
     }
 
@@ -583,7 +582,6 @@ function isIdentifierInitializedByMixinCreate(
       if (object.text() === localMixin && (property.text() === 'create' || property.text() === 'createWithMixins')) {
         debugLog(options, `Found matching ${localMixin}.create() call!`);
         return true;
-      } else {
       }
     }
   }

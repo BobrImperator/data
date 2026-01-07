@@ -272,8 +272,8 @@ export function extractTypeNameMapping(root: SgNode, options?: TransformOptions)
         }
       }
     }
-  } catch (error) {
-    debugLog(options, `Error extracting type name mapping: ${error}`);
+  } catch (error: unknown) {
+    debugLog(options, `Error extracting type name mapping: ${String(error)}`);
   }
 
   return mapping;
@@ -882,15 +882,18 @@ function processImports(source: string, filePath: string, baseDir: string, optio
             );
             // Convert "import type ModelName from 'path'" to "import type { ModelName } from 'path'"
             // Handle Model suffix by creating aliased imports
-            newImport = newImport.replace(/import\s+type\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (match, typeName) => {
-              if (typeName.endsWith('Model')) {
-                const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
-                return `import type { ${interfaceName} as ${typeName} } from`;
+            newImport = newImport.replace(
+              /import\s+type\s+([A-Z][a-zA-Z0-9]*)\s+from/g,
+              (_match: string, typeName: string) => {
+                if (typeName.endsWith('Model')) {
+                  const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
+                  return `import type { ${interfaceName} as ${typeName} } from`;
+                }
+                return `import type { ${typeName} } from`;
               }
-              return `import type { ${typeName} } from`;
-            });
+            );
             // Also handle imports without 'type' keyword
-            newImport = newImport.replace(/import\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (match, typeName) => {
+            newImport = newImport.replace(/import\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (_match: string, typeName: string) => {
               if (typeName.endsWith('Model')) {
                 const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
                 return `import type { ${interfaceName} as ${typeName} } from`;
@@ -1364,7 +1367,7 @@ function updateRelativeImportsForExtensions(
       // First try directory import mapping if available
       if (options?.directoryImportMapping && sourceFilePath) {
         // Extract the base directory structure from the source file
-        const sourceDir = sourceFilePath.replace(/\/[^\/]+\.(js|ts)$/, '');
+        const sourceDir = sourceFilePath.replace(/\/[^/]+\.(js|ts)$/, '');
 
         // Look for a mapping that matches the source directory structure
         for (const [mappedDir, importBase] of Object.entries(options.directoryImportMapping)) {
@@ -1402,7 +1405,7 @@ function updateRelativeImportsForExtensions(
                 const importParts = relativePath.split('/');
 
                 // Start from the current directory (sourceParts)
-                let resultParts = [...sourceParts];
+                const resultParts = [...sourceParts];
 
                 // Process the import parts
                 for (const part of importParts) {
@@ -1649,10 +1652,10 @@ export function isModelFile(filePath: string, source: string, options?: Transfor
     const importStatements = root.findAll({ rule: { kind: 'import_statement' } });
 
     for (const importNode of importStatements) {
-      const source = importNode.field('source');
-      if (!source) continue;
+      const importSource = importNode.field('source');
+      if (!importSource) continue;
 
-      const sourceText = source.text().replace(/['"]/g, '');
+      const sourceText = importSource.text().replace(/['"]/g, '');
 
       // Check for direct matches with base model sources
       let isBaseModelImport = baseModelSources.includes(sourceText);
@@ -1736,9 +1739,9 @@ export function isModelFile(filePath: string, source: string, options?: Transfor
               }
             }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Ignore path resolution errors
-          debugLog(options, `Failed to resolve relative path ${sourceText}: ${error}`);
+          debugLog(options, `Failed to resolve relative path ${sourceText}: ${String(error)}`);
         }
       }
 
