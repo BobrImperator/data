@@ -92,6 +92,22 @@ export function generateWarpDriveTypeImport(
 }
 
 /**
+ * Derive the Type symbol import path from the emberDataImportSource
+ * e.g., @auditboard/warp-drive/v1/model -> @auditboard/warp-drive/v1/core-types/symbols
+ *       @ember-data/model -> @warp-drive/core/types/symbols
+ */
+function getTypeSymbolImportPath(emberDataSource: string): string {
+  // If using a custom ember-data source with a package prefix, derive the symbols path
+  if (emberDataSource.includes('/model')) {
+    // Replace /model with /core-types/symbols for custom packages
+    // e.g., @auditboard/warp-drive/v1/model -> @auditboard/warp-drive/v1/core-types/symbols
+    return emberDataSource.replace(/\/model$/, '/core-types/symbols');
+  }
+  // Default to the standard warp-drive path
+  return '@warp-drive/core/types/symbols';
+}
+
+/**
  * Generate common WarpDrive type imports
  */
 export function generateCommonWarpDriveImports(options?: TransformOptions): {
@@ -100,8 +116,9 @@ export function generateCommonWarpDriveImports(options?: TransformOptions): {
   hasManyImport: string;
 } {
   const emberDataSource = options?.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE;
+  const typeSymbolPath = getTypeSymbolImportPath(emberDataSource);
   return {
-    typeImport: generateWarpDriveTypeImport('Type', '@warp-drive/core/types/symbols', options),
+    typeImport: generateWarpDriveTypeImport('Type', typeSymbolPath, options),
     asyncHasManyImport: generateWarpDriveTypeImport('AsyncHasMany', emberDataSource, options),
     hasManyImport: generateWarpDriveTypeImport('HasMany', emberDataSource, options),
   };

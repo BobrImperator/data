@@ -1644,7 +1644,10 @@ function extractModelFields(
     debugLog(options, `Mixin traits: ${mixinTraits.join(', ')}`);
   }
 
-  return { schemaFields, extensionProperties, mixinTraits, mixinExtensions };
+  // Deduplicate mixinTraits while preserving order
+  const uniqueMixinTraits = [...new Set(mixinTraits)];
+
+  return { schemaFields, extensionProperties, mixinTraits: uniqueMixinTraits, mixinExtensions };
 }
 
 /**
@@ -1672,7 +1675,9 @@ function extractIntermediateModelTraits(
 
       if (modelPath) {
         // Convert path like "soxhub-client/core/data-field-model" to "data-field-model"
-        const traitName = modelPath.split('/').pop() || modelPath;
+        let traitName = modelPath.split('/').pop() || modelPath;
+        // Strip any file extension (.js, .ts)
+        traitName = traitName.replace(/\.[jt]s$/, '');
         const dasherizedName = traitName
           .replace(/([A-Z])/g, '-$1')
           .toLowerCase()
