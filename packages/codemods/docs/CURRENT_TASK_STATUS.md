@@ -38,9 +38,9 @@
 ### Remaining Type Errors
 Most errors fall into these categories:
 
-1. **Missing `store` property** - Solved by adding `storeType` to config (see above)
-2. **Module resolution errors** - Some external package models reference types not generated in target app
-3. **Named vs default export mismatches** - Some generated imports use wrong export syntax
+1. **Missing `store` property** - ✓ Solved by adding `storeType` to config (see above)
+2. **Module resolution errors** - Some external package models reference types not generated in target app (config issue, not codemod bug)
+3. **Named vs default export mismatches** - ✓ Fixed: `generateStubResourceTypeInterface()` was using `export default interface` instead of `export interface`
 
 ## Configuration Used (AuditBoard)
 
@@ -73,6 +73,9 @@ Most errors fall into these categories:
 - Added automatic `id` property injection in `generateIntermediateModelTraitArtifacts()`
 - Added `store` property injection when `storeType` is configured in `generateIntermediateModelTraitArtifacts()`
 - Added Store type import generation when `storeType` is configured
+
+### packages/codemods/src/schema-migration/mixin-to-schema.ts
+- Fixed `generateStubResourceTypeInterface()` to use named export (`export interface`) instead of default export
 
 ### packages/codemods/src/schema-migration/config-schema.json
 - Added `storeType` configuration option with `name` and `import` properties

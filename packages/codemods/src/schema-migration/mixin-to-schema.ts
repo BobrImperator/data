@@ -123,8 +123,8 @@ function generateStubResourceTypeInterface(typeName: string): string {
   return `// Stub interface for ${typeName} - generated automatically
 // This file will be replaced when the actual resource type is generated
 
-export default interface ${typeName} {
-  // TODO: Add actual properties when resource schema is generated
+export interface ${typeName} {
+  // Stub: properties will be populated when the actual resource type is generated
 }
 `;
 }
