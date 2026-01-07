@@ -137,13 +137,20 @@ export interface FileableTrait {
 `;
 
 exports[`mixin-to-schema transform (artifacts) > basic functionality > converts mixin with no trait fields to extension artifact > code 1`] = `
-"export interface NoTraitsTrait {
-}
-"
+"export const noTraitsTrait = {
+  "name": "no-traits",
+  "mode": "legacy",
+  "fields": []
+};"
 `;
 
 exports[`mixin-to-schema transform (artifacts) > basic functionality > converts mixin with no trait fields to extension artifact > metadata 1`] = `
 [
+  {
+    "name": "noTraitsTrait",
+    "suggestedFileName": "no-traits.schema.js",
+    "type": "trait",
+  },
   {
     "name": "NoTraitsTrait",
     "suggestedFileName": "no-traits.schema.types.ts",
@@ -157,30 +164,21 @@ exports[`mixin-to-schema transform (artifacts) > basic functionality > converts 
 ]
 `;
 
-exports[`mixin-to-schema transform (artifacts) > basic functionality > generates empty trait for empty mixin > empty mixin metadata 1`] = `
-[
-  {
-    "name": "EmptyTrait",
-    "suggestedFileName": "empty.schema.types.ts",
-    "type": "trait-type",
-  },
-]
-`;
-
-exports[`mixin-to-schema transform (artifacts) > basic functionality > generates empty trait for empty mixin > empty trait type code 1`] = `
-"export interface EmptyTrait {
-}
-"
-`;
-
 exports[`mixin-to-schema transform (artifacts) > basic functionality > preserves newlines and tabs in extension artifact properties without escaping > code 1`] = `
-"export interface PlannableTrait {
-}
-"
+"export const plannableTrait = {
+  "name": "plannable",
+  "mode": "legacy",
+  "fields": []
+};"
 `;
 
 exports[`mixin-to-schema transform (artifacts) > basic functionality > preserves newlines and tabs in extension artifact properties without escaping > metadata 1`] = `
 [
+  {
+    "name": "plannableTrait",
+    "suggestedFileName": "plannable.schema.js",
+    "type": "trait",
+  },
   {
     "name": "PlannableTrait",
     "suggestedFileName": "plannable.schema.types.ts",
@@ -634,6 +632,16 @@ export interface BelongsToTrait {
 
 exports[`mixin-to-schema transform (artifacts) > import validation > produces an extension artifact when no valid EmberData imports are found 1`] = `
 [
+  {
+    "code": "export const noValidImportsTrait = {
+  "name": "no-valid-imports",
+  "mode": "legacy",
+  "fields": []
+};",
+    "name": "noValidImportsTrait",
+    "suggestedFileName": "no-valid-imports.schema.js",
+    "type": "trait",
+  },
   {
     "code": "export interface NoValidImportsTrait {
 }

@@ -10,7 +10,7 @@ describe('mixin-to-schema transform (artifacts)', () => {
 export default Mixin.create({});`;
 
       const artifacts = toArtifacts('app/mixins/empty.js', input, {});
-      expect(artifacts).toHaveLength(1); // Just trait-type artifact
+      expect(artifacts).toHaveLength(2); // Trait and trait-type artifacts
 
       // Test artifact metadata
       expect(
