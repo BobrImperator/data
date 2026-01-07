@@ -114,13 +114,21 @@ export function generateCommonWarpDriveImports(options?: TransformOptions): {
   typeImport: string;
   asyncHasManyImport: string;
   hasManyImport: string;
+  storeImport: string;
 } {
   const emberDataSource = options?.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE;
   const typeSymbolPath = getTypeSymbolImportPath(emberDataSource);
+  // Derive store import path from emberDataSource
+  // e.g., @auditboard/warp-drive/v1/model -> @auditboard/warp-drive/v1/store
+  //       @ember-data/model -> @warp-drive/core
+  const storeImportPath = emberDataSource.includes('/model')
+    ? emberDataSource.replace(/\/model$/, '/store')
+    : '@warp-drive/core';
   return {
     typeImport: generateWarpDriveTypeImport('Type', typeSymbolPath, options),
     asyncHasManyImport: generateWarpDriveTypeImport('AsyncHasMany', emberDataSource, options),
     hasManyImport: generateWarpDriveTypeImport('HasMany', emberDataSource, options),
+    storeImport: generateWarpDriveTypeImport('Store', storeImportPath, options),
   };
 }
 

@@ -858,6 +858,22 @@ function generateIntermediateModelTraitArtifacts(
     };
   });
 
+  // For intermediate model traits, we need to add the `id` property from the Model base class
+  // to the type chain. We add this to all traits since it's inherited from Model.
+  // Note: We don't add `store` because the Store type is application-specific.
+  // Only add if not already present from schema fields
+  const hasId = traitFieldTypes.some((f) => f.name === 'id');
+
+  if (!hasId) {
+    // Add id property at the beginning - all EmberData records have id
+    traitFieldTypes.unshift({
+      name: 'id',
+      type: 'string | null',
+      readonly: false, // id can be set on new records
+    });
+    debugLog(options, `DEBUG: Added id property to ${traitName} trait`);
+  }
+
   // Collect imports for trait interface
   const traitImports = new Set<string>();
   const commonImports = generateCommonWarpDriveImports(options);
