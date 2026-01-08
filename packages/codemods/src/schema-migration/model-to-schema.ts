@@ -954,8 +954,8 @@ function generateIntermediateModelTraitArtifacts(
   const commonImports = generateCommonWarpDriveImports(options);
 
   // Add imports for Model base property types (BelongsToReference, HasManyReference, Errors)
-  const emberDataSource = options?.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE;
-  traitImports.add(`type { BelongsToReference, HasManyReference, Errors } from '${emberDataSource}'`);
+  // These types always come from @warp-drive/legacy, not from emberDataImportSource
+  traitImports.add(`type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private'`);
 
   // Add any specific imports needed by field types
   schemaFields.forEach((field) => {
