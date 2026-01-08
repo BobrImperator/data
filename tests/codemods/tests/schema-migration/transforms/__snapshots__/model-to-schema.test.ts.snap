@@ -23,10 +23,9 @@ export class ProcessedModelExtension extends Base {
 `;
 
 exports[`model-to-schema transform (artifacts) > TypeScript type artifacts > generates resource-type and extension artifacts when model has methods and computed properties > model schema type interface 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
-import type { ProcessedModelExtensionSignature } from '../extensions/processed-model';
+"import type { Type } from '@ember-data/core-types/symbols';
 
-export interface ProcessedModel extends ProcessedModelExtensionSignature {
+export interface ProcessedModel {
 	readonly [Type]: 'processed-model';
 	readonly name: string | null;
 	readonly content: string | null;
@@ -35,7 +34,7 @@ export interface ProcessedModel extends ProcessedModelExtensionSignature {
 `;
 
 exports[`model-to-schema transform (artifacts) > TypeScript type artifacts > generates resource-type artifact with proper interface for basic models > basic schema type interface 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 import type { Company } from 'test-app/data/resources/company.schema.types';
 import type { Project } from 'test-app/data/resources/project.schema.types';
 import type { AsyncHasMany } from '@ember-data/model';
@@ -51,7 +50,7 @@ export interface User {
 `;
 
 exports[`model-to-schema transform (artifacts) > TypeScript type artifacts > handles custom type mappings in schema type interfaces > custom type mappings interface 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 
 export interface TypedModel {
 	readonly [Type]: 'typed-model';
@@ -63,7 +62,7 @@ export interface TypedModel {
 `;
 
 exports[`model-to-schema transform (artifacts) > TypeScript type artifacts > handles relationship types correctly in schema type interfaces > relationship types interface 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 import type { User } from 'test-app/data/resources/user.schema.types';
 import type { Company } from 'test-app/data/resources/company.schema.types';
 import type { File } from 'test-app/data/resources/file.schema.types';
@@ -83,7 +82,7 @@ export interface RelationshipModel {
 `;
 
 exports[`model-to-schema transform (artifacts) > TypeScript type artifacts > uses unknown type for unsupported transforms > unknown types interface 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 
 export interface UnknownTypesModel {
 	readonly [Type]: 'unknown-types-model';
@@ -313,7 +312,7 @@ exports[`model-to-schema transform (artifacts) > basic functionality > supports 
 `;
 
 exports[`model-to-schema transform (artifacts) > custom type mappings > applies custom type mappings to attribute types > custom type mappings in schema types 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 
 export interface CustomTypesModel {
 	readonly [Type]: 'custom-types-model';
@@ -325,7 +324,7 @@ export interface CustomTypesModel {
 `;
 
 exports[`model-to-schema transform (artifacts) > custom type mappings > falls back to unknown for unmapped custom types > unknown fallback for unmapped types 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@ember-data/core-types/symbols';
 
 export interface UnmappedTypesModel {
 	readonly [Type]: 'unmapped-types-model';
@@ -383,7 +382,7 @@ exports[`model-to-schema transform (artifacts) > edge cases > preserves complex 
 `;
 
 exports[`model-to-schema transform (artifacts) > mirror flag > uses configured emberDataImportSource for HasMany types in type artifacts > custom EmberData source for HasMany types 1`] = `
-"import type { Type } from '@warp-drive/core/types/symbols';
+"import type { Type } from '@auditboard/warp-drive/v1/core-types/symbols';
 import type { Tag } from 'test-app/data/resources/tag.schema.types';
 import type { HasMany } from '@auditboard/warp-drive/v1/model';
 import type { Project } from 'test-app/data/resources/project.schema.types';

@@ -1328,6 +1328,22 @@ function isMixinFile(filePath: string, options?: TransformOptions): boolean {
 }
 
 /**
+ * Determine if an export statement should remain exported in the extension file.
+ * We keep interfaces and type aliases exported so they can be imported by other files.
+ * Other declarations (classes, functions, consts) become internal to the extension.
+ */
+function shouldKeepExported(exportNode: SgNode): boolean {
+  // Get the declaration being exported
+  const declaration = exportNode.field('declaration');
+  if (!declaration) return false;
+
+  const kind = declaration.kind();
+
+  // Keep interface and type alias declarations exported
+  return kind === 'interface_declaration' || kind === 'type_alias_declaration';
+}
+
+/**
  * Create extension artifact by modifying the original file using AST
  * This preserves all imports, comments, and structure while replacing the class/export
  */
@@ -1394,7 +1410,13 @@ export function createExtensionFromOriginalFile(
         continue;
       }
 
-      // For non-default exports, remove the export keyword but keep the content
+      // Check if this is a type definition that should remain exported
+      if (shouldKeepExported(exportNode)) {
+        debugLog(options, `Keeping export for type definition: ${exportText.substring(0, 50)}...`);
+        continue;
+      }
+
+      // For non-type exports, remove the export keyword but keep the content
       // Simply replace "export " with empty string
       const contentWithoutExport = exportText.replace(/^export\s+/, '');
       debugLog(options, `Removing export keyword, keeping content: ${contentWithoutExport.substring(0, 50)}...`);

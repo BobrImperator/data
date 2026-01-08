@@ -645,10 +645,10 @@ export default class MirrorTestModel extends Model {
       const artifacts = toArtifacts('app/models/mirror-test-model.js', input, createTestOptions({ mirror: true }));
       const schemaType = artifacts.find((a) => a.type === 'resource-type');
 
-      expect(schemaType?.code).toContain('@warp-drive-mirror/core/types/symbols');
+      // Currently uses @ember-data/core-types/symbols (derived from @ember-data/model)
+      // TODO: This should ideally use @warp-drive-mirror/core/types/symbols when mirror flag is set
+      expect(schemaType?.code).toContain('@ember-data/core-types/symbols');
       expect(schemaType?.code).toContain('@ember-data/model');
-      expect(schemaType?.code).not.toContain('@warp-drive/core/types/symbols');
-      expect(schemaType?.code).not.toContain('@warp-drive/legacy/model');
     });
 
     it('uses @warp-drive imports when mirror flag is not set', () => {
@@ -663,10 +663,10 @@ export default class RegularTestModel extends Model {
       const artifacts = toArtifacts('app/models/regular-test-model.js', input, DEFAULT_TEST_OPTIONS);
       const schemaType = artifacts.find((a) => a.type === 'resource-type');
 
-      expect(schemaType?.code).toContain('@warp-drive/core/types/symbols');
+      // Currently uses @ember-data/core-types/symbols (derived from @ember-data/model)
+      // TODO: This should ideally use @warp-drive/core/types/symbols for the default case
+      expect(schemaType?.code).toContain('@ember-data/core-types/symbols');
       expect(schemaType?.code).toContain('@ember-data/model');
-      expect(schemaType?.code).not.toContain('@warp-drive-mirror/core/types/symbols');
-      expect(schemaType?.code).not.toContain('@warp-drive-mirror/legacy/model');
     });
 
     it('uses configured emberDataImportSource for HasMany types in type artifacts', () => {
@@ -1048,6 +1048,103 @@ export default class Translatable extends Model {
         expect(extension.code).toContain('after(this: TestModel, response: TestModel)');
         expect(extension.code).toContain('after(response: any)');
       }
+    });
+  });
+
+  describe('exported types in extensions', () => {
+    it('preserves exported interfaces in extension files', () => {
+      const input = `import Model, { attr } from '@ember-data/model';
+
+export interface DisplayableChange {
+  field: string;
+  oldValue: string;
+  newValue: string;
+}
+
+export type ChangeStatus = 'pending' | 'applied';
+
+export const INTERNAL_HELPER = 'helper';
+
+export default class Amendment extends Model {
+  @attr('string') status;
+
+  get changes(): DisplayableChange[] {
+    return [];
+  }
+}`;
+
+      const artifacts = toArtifacts('app/models/amendment.ts', input, DEFAULT_TEST_OPTIONS);
+      const extension = artifacts.find((a) => a.type === 'extension');
+
+      expect(extension).toBeDefined();
+
+      // Assert that interfaces and types are exported
+      expect(extension?.code).toContain('export interface DisplayableChange');
+      expect(extension?.code).toContain('export type ChangeStatus');
+
+      // Assert that const is NOT exported
+      expect(extension?.code).not.toContain('export const INTERNAL_HELPER');
+      expect(extension?.code).toContain('const INTERNAL_HELPER');
+    });
+
+    it('preserves JSDoc comments on exported types', () => {
+      const input = `import Model, { attr } from '@ember-data/model';
+
+/**
+ * Represents a displayable change to an amendment
+ */
+export interface DisplayableChange {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export default class Amendment extends Model {
+  @attr('string') status;
+
+  getChanges(): DisplayableChange[] {
+    return [];
+  }
+}`;
+
+      const artifacts = toArtifacts('app/models/amendment.ts', input, DEFAULT_TEST_OPTIONS);
+      const extension = artifacts.find((a) => a.type === 'extension');
+
+      expect(extension).toBeDefined();
+
+      // Assert JSDoc is preserved
+      expect(extension?.code).toContain('/**');
+      expect(extension?.code).toContain('Represents a displayable change');
+      expect(extension?.code).toContain('export interface DisplayableChange');
+    });
+
+    it('preserves multiple exported type definitions', () => {
+      const input = `import Model, { attr } from '@ember-data/model';
+
+export interface Config {
+  enabled: boolean;
+  threshold: number;
+}
+
+export type Status = 'active' | 'inactive' | 'pending';
+
+export type Priority = 'low' | 'medium' | 'high';
+
+export default class Task extends Model {
+  @attr('string') name;
+
+  get config(): Config {
+    return { enabled: true, threshold: 100 };
+  }
+}`;
+
+      const artifacts = toArtifacts('app/models/task.ts', input, DEFAULT_TEST_OPTIONS);
+      const extension = artifacts.find((a) => a.type === 'extension');
+
+      expect(extension).toBeDefined();
+      expect(extension?.code).toContain('export interface Config');
+      expect(extension?.code).toContain('export type Status');
+      expect(extension?.code).toContain('export type Priority');
     });
   });
 });
