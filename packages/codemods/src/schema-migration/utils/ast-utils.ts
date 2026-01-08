@@ -1370,8 +1370,14 @@ export function createExtensionFromOriginalFile(
 
     debugLog(options, `Creating extension from ${filePath} with ${extensionProperties.length} properties`);
 
+    // Calculate expected target file path for the extension
+    const path = require('path');
+    const extensionsDir = options?.extensionsDir || './app/data/extensions';
+    const originalExt = filePath.endsWith('.ts') ? '.ts' : '.js';
+    const targetFilePath = path.join(path.resolve(extensionsDir), `${baseName}${originalExt}`);
+
     // Update relative imports for the new extension location
-    const updatedSource = updateRelativeImportsForExtensions(source, root, options, filePath);
+    const updatedSource = updateRelativeImportsForExtensions(source, root, options, filePath, targetFilePath);
     debugLog(options, `Updated relative imports in source`);
 
     // Determine format based on source type: mixins use object format, models use class format
@@ -1443,9 +1449,6 @@ export function createExtensionFromOriginalFile(
     debugLog(options, `Generated extension code (first 200 chars): ${modifiedSource.substring(0, 200)}...`);
     debugLog(options, `Extension code to add: ${extensionCode.substring(0, 200)}...`);
 
-    // Determine the file extension from the original file
-    const originalExt = filePath.endsWith('.ts') ? '.ts' : '.js';
-
     return {
       type: 'extension',
       name: extensionName,
@@ -1459,6 +1462,26 @@ export function createExtensionFromOriginalFile(
 }
 
 /**
+ * Calculate correct relative import path when moving a file to a different directory
+ */
+function calculateRelativeImportPath(
+  sourceFilePath: string,      // Original model file location
+  targetFilePath: string,       // Extension file location
+  importedFilePath: string      // What the relative import points to
+): string {
+  const path = require('path');
+  const sourceDir = path.dirname(sourceFilePath);
+  const absoluteImportPath = path.resolve(sourceDir, importedFilePath);
+  const targetDir = path.dirname(targetFilePath);
+  const newRelativePath = path.relative(targetDir, absoluteImportPath);
+
+  // Normalize and ensure ./ or ../ prefix
+  // Use forward slashes for import paths (even on Windows)
+  const normalized = newRelativePath.split(path.sep).join('/');
+  return normalized.startsWith('.') ? normalized : './' + normalized;
+}
+
+/**
  * Update relative imports when moving from models/ to extensions/
  * Uses directoryImportMapping to resolve relative imports to their original packages
  */
@@ -1466,7 +1489,8 @@ function updateRelativeImportsForExtensions(
   source: string,
   root: SgNode,
   options?: TransformOptions,
-  sourceFilePath?: string
+  sourceFilePath?: string,
+  targetFilePath?: string
 ): string {
   let result = source;
 
@@ -1560,16 +1584,27 @@ function updateRelativeImportsForExtensions(
         const newImportSource = importSource.replace(importPath, absoluteImportPath);
         result = result.replace(importSource, newImportSource);
       } else {
-        // Final fallback to relative path adjustment
-        if (importPath.startsWith('./')) {
-          const newPath = importPath.replace('./', '../../models/');
-          const newImportSource = importSource.replace(importPath, newPath);
+        // Dynamic calculation if we have both source and target paths
+        if (targetFilePath && sourceFilePath) {
+          const newRelativePath = calculateRelativeImportPath(
+            sourceFilePath,
+            targetFilePath,
+            importPath
+          );
+          const newImportSource = importSource.replace(importPath, newRelativePath);
           result = result.replace(importSource, newImportSource);
-        } else if (importPath.startsWith('../')) {
-          // Transform ../file to ../../file (going up one more level)
-          const newPath = importPath.replace('../', '../../');
-          const newImportSource = importSource.replace(importPath, newPath);
-          result = result.replace(importSource, newImportSource);
+        } else {
+          // Final fallback to relative path adjustment (hardcoded assumptions)
+          if (importPath.startsWith('./')) {
+            const newPath = importPath.replace('./', '../../models/');
+            const newImportSource = importSource.replace(importPath, newPath);
+            result = result.replace(importSource, newImportSource);
+          } else if (importPath.startsWith('../')) {
+            // Transform ../file to ../../file (going up one more level)
+            const newPath = importPath.replace('../', '../../');
+            const newImportSource = importSource.replace(importPath, newPath);
+            result = result.replace(importSource, newImportSource);
+          }
         }
       }
     }
