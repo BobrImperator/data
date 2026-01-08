@@ -110,4 +110,70 @@ export default class SpecialModel extends Model {
     expect(result.errors[0]).toContain('Could not find or read intermediate model file for path: non-existent/model');
     expect(result.artifacts.length).toBe(0);
   });
+
+  it('should include Model base properties in generated trait types', () => {
+    // Create a test intermediate model
+    const coreDir = join(tempDir, 'app/core');
+    mkdirSync(coreDir, { recursive: true });
+
+    const baseModelContent = `
+import Model from '@ember-data/model';
+import { attr } from '@ember-data/model';
+
+export default class DataFieldModel extends Model {
+  @attr('string') fieldName;
+}
+`;
+
+    writeFileSync(join(coreDir, 'data-field-model.ts'), baseModelContent);
+
+    const result = processIntermediateModelsToTraits(
+      ['test-app/core/data-field-model'],
+      [
+        {
+          pattern: 'test-app/core/*',
+          dir: join(tempDir, 'app/core/*')
+        }
+      ],
+      undefined,
+      {
+        verbose: false,
+        debug: false,
+      }
+    );
+
+    expect(result.errors.length).toBe(0);
+    expect(result.artifacts.length).toBeGreaterThan(0);
+
+    // Find the trait-type artifact
+    const traitTypeArtifact = result.artifacts.find((a) => a.type === 'trait-type');
+    expect(traitTypeArtifact).toBeDefined();
+
+    // Verify Model base properties are included
+    const code = traitTypeArtifact?.code || '';
+
+    // State properties
+    expect(code).toContain('isNew');
+    expect(code).toContain('hasDirtyAttributes');
+    expect(code).toContain('isDeleted');
+    expect(code).toContain('isSaving');
+
+    // Lifecycle methods
+    expect(code).toContain('save');
+    expect(code).toContain('reload');
+    expect(code).toContain('deleteRecord');
+    expect(code).toContain('rollbackAttributes');
+
+    // Relationship accessor methods
+    expect(code).toContain('belongsTo');
+    expect(code).toContain('hasMany');
+
+    // Error property
+    expect(code).toContain('errors');
+
+    // Import for reference types
+    expect(code).toContain('BelongsToReference');
+    expect(code).toContain('HasManyReference');
+    expect(code).toContain('Errors');
+  });
 });

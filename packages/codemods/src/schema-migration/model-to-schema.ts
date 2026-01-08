@@ -38,6 +38,47 @@ import {
 } from './utils/ast-utils.js';
 
 /**
+ * Get the base EmberData Model properties and methods that should be available on all model types.
+ * These are inherited from the Model base class but need to be declared in trait interfaces
+ * so TypeScript knows they exist when accessing them in extension code.
+ */
+function getModelBaseProperties(): Array<{ name: string; type: string; readonly?: boolean }> {
+  return [
+    // State properties (readonly getters from Model)
+    { name: 'isNew', type: 'boolean', readonly: true },
+    { name: 'hasDirtyAttributes', type: 'boolean', readonly: true },
+    { name: 'isDeleted', type: 'boolean', readonly: true },
+    { name: 'isSaving', type: 'boolean', readonly: true },
+    { name: 'isValid', type: 'boolean', readonly: true },
+    { name: 'isError', type: 'boolean', readonly: true },
+    { name: 'isLoaded', type: 'boolean', readonly: true },
+    { name: 'isEmpty', type: 'boolean', readonly: true },
+
+    // Lifecycle methods
+    { name: 'save', type: '(options?: Record<string, unknown>) => Promise<this>' },
+    { name: 'reload', type: '(options?: Record<string, unknown>) => Promise<this>' },
+    { name: 'deleteRecord', type: '() => void' },
+    { name: 'unloadRecord', type: '() => void' },
+    { name: 'destroyRecord', type: '(options?: Record<string, unknown>) => Promise<void>' },
+    { name: 'rollbackAttributes', type: '() => void' },
+
+    // Relationship accessor methods
+    { name: 'belongsTo', type: '(propertyName: string) => BelongsToReference' },
+    { name: 'hasMany', type: '(propertyName: string) => HasManyReference' },
+
+    // Utility methods
+    { name: 'serialize', type: '(options?: Record<string, unknown>) => unknown' },
+
+    // Error property
+    { name: 'errors', type: 'Errors', readonly: true },
+
+    // Additional state
+    { name: 'adapterError', type: 'Error | null', readonly: true },
+    { name: 'isReloading', type: 'boolean', readonly: true },
+  ];
+}
+
+/**
  * Determines if an AST node represents object method syntax that doesn't need key: value format
  * This is used for class methods that become extension object methods
  */
@@ -892,9 +933,29 @@ function generateIntermediateModelTraitArtifacts(
     debugLog(options, `DEBUG: Added store property with type ${storeTypeName} to ${traitName} trait`);
   }
 
+  // Add Model base properties (isNew, save, belongsTo, etc.) to trait types
+  // These are inherited from EmberData Model but need to be declared for TypeScript
+  const modelBaseProperties = getModelBaseProperties();
+  for (const prop of modelBaseProperties) {
+    // Only add if not already present (avoid duplicates)
+    const exists = traitFieldTypes.some((f) => f.name === prop.name);
+    if (!exists) {
+      traitFieldTypes.push({
+        name: prop.name,
+        type: prop.type,
+        readonly: prop.readonly ?? false,
+      });
+    }
+  }
+  debugLog(options, `DEBUG: Added ${modelBaseProperties.length} Model base properties to ${traitName} trait`);
+
   // Collect imports for trait interface
   const traitImports = new Set<string>();
   const commonImports = generateCommonWarpDriveImports(options);
+
+  // Add imports for Model base property types (BelongsToReference, HasManyReference, Errors)
+  const emberDataSource = options?.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE;
+  traitImports.add(`type { BelongsToReference, HasManyReference, Errors } from '${emberDataSource}'`);
 
   // Add any specific imports needed by field types
   schemaFields.forEach((field) => {
