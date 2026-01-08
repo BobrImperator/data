@@ -1,7 +1,7 @@
 import { parse } from '@ast-grep/napi';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
-import { basename, dirname, join, resolve } from 'path';
+import { basename, dirname, extname, join, resolve } from 'path';
 
 import { processIntermediateModelsToTraits, willModelHaveExtension } from './model-to-schema.js';
 import type { TransformOptions } from './utils/ast-utils.js';
@@ -202,6 +202,43 @@ function analyzeModelMixinUsage(
   }
 
   return transitiveModelMixins;
+}
+
+/**
+ * Check if a file path matches any intermediate model path
+ */
+function isIntermediateModel(
+  filePath: string,
+  intermediateModelPaths?: string[],
+  additionalModelSources?: Array<{ pattern: string; dir: string }>
+): boolean {
+  if (!intermediateModelPaths) return false;
+
+  const fileBaseName = basename(filePath, extname(filePath));
+
+  for (const intermediatePath of intermediateModelPaths) {
+    // Handle paths with extensions (e.g., "soxhub-client/core/base-model.js")
+    const intermediateBaseName = basename(intermediatePath, extname(intermediatePath));
+
+    if (fileBaseName === intermediateBaseName) {
+      // Check if file is from a matching additional source
+      if (additionalModelSources) {
+        for (const source of additionalModelSources) {
+          const sourceDirResolved = resolve(source.dir.replace(/\/?\*+$/, ''));
+          if (filePath.startsWith(sourceDirResolved)) {
+            return true;
+          }
+        }
+      }
+
+      // Also check if it's in app/core
+      if (filePath.includes('/app/core/')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -789,7 +826,10 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     const modelFiles = await glob(modelPattern);
     filesToProcess.push(
       ...modelFiles.filter(
-        (file) => existsSync(file) && (!options.skipProcessed || !isAlreadyProcessed(file, finalOptions))
+        (file) =>
+          existsSync(file) &&
+          (!options.skipProcessed || !isAlreadyProcessed(file, finalOptions)) &&
+          !isIntermediateModel(file, finalOptions.intermediateModelPaths, finalOptions.additionalModelSources)
       )
     );
 
@@ -809,14 +849,17 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
         try {
           const resolvedPattern = resolve(dirGlobPattern);
           const additionalModelFiles = await glob(resolvedPattern);
-          filesToProcess.push(
-            ...additionalModelFiles.filter(
-              (file) => existsSync(file) && (!options.skipProcessed || !isAlreadyProcessed(file, finalOptions))
-            )
+          // Filter out intermediate models from additional sources
+          const regularModelFiles = additionalModelFiles.filter(
+            (file) =>
+              existsSync(file) &&
+              (!options.skipProcessed || !isAlreadyProcessed(file, finalOptions)) &&
+              !isIntermediateModel(file, finalOptions.intermediateModelPaths, finalOptions.additionalModelSources)
           );
+          filesToProcess.push(...regularModelFiles);
 
           if (finalOptions.verbose) {
-            logger.info(`📋 Found ${additionalModelFiles.length} additional model files from ${source.pattern}`);
+            logger.info(`📋 Found ${regularModelFiles.length} additional model files from ${source.pattern} (${additionalModelFiles.length - regularModelFiles.length} intermediate models excluded)`);
           }
         } catch (error: unknown) {
           logger.error(`Failed to process additional model source ${source.pattern}: ${String(error)}`);
