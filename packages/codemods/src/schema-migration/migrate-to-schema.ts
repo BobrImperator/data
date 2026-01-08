@@ -205,6 +205,25 @@ function analyzeModelMixinUsage(
 }
 
 /**
+ * Get relative path for a file from additionalModelSources
+ */
+function getRelativePathFromAdditionalSources(
+  filePath: string,
+  additionalSources?: Array<{ pattern: string; dir: string }>
+): string | null {
+  if (!additionalSources) return null;
+
+  for (const source of additionalSources) {
+    const sourceDirResolved = resolve(source.dir.replace(/\/?\*+$/, '')); // Remove trailing wildcards
+    if (filePath.startsWith(sourceDirResolved)) {
+      // File is from this additional source, extract just the basename
+      return `/${basename(filePath)}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Get the output path for an artifact based on its type and source file
  */
 function getArtifactOutputPath(
@@ -220,14 +239,19 @@ function getArtifactOutputPath(
     // Schema files go to resourcesDir
     outputDir = finalOptions.resourcesDir || './app/data/resources';
 
-    // Handle external models when generateExternalResources is enabled
+    // Try standard model source directory first
     let relativePath = filePath.replace(resolve(finalOptions.modelSourceDir || './app/models'), '');
 
-    // If the replace operation didn't work (external model), and generateExternalResources is enabled,
-    // extract just the filename for external models
-    if (relativePath === filePath && finalOptions.generateExternalResources) {
-      const fileName = basename(filePath); // Keep the extension
-      relativePath = `/${fileName}`;
+    // If not in standard directory, check additionalModelSources
+    if (relativePath === filePath) {
+      const additionalPath = getRelativePathFromAdditionalSources(filePath, finalOptions.additionalModelSources);
+      if (additionalPath) {
+        relativePath = additionalPath;
+      } else if (finalOptions.generateExternalResources) {
+        // Fallback: extract just the filename for external models
+        const fileName = basename(filePath);
+        relativePath = `/${fileName}`;
+      }
     }
 
     // Resources should include .schema and match original source file extension
@@ -238,14 +262,19 @@ function getArtifactOutputPath(
     // Type files are colocated with their schemas in resourcesDir
     outputDir = finalOptions.resourcesDir || './app/data/resources';
 
-    // Handle external models when generateExternalResources is enabled
+    // Try standard model source directory first
     let relativePath = filePath.replace(resolve(finalOptions.modelSourceDir || './app/models'), '');
 
-    // If the replace operation didn't work (external model), and generateExternalResources is enabled,
-    // extract just the filename for external models
-    if (relativePath === filePath && finalOptions.generateExternalResources) {
-      const fileName = basename(filePath); // Keep the extension
-      relativePath = `/${fileName}`;
+    // If not in standard directory, check additionalModelSources
+    if (relativePath === filePath) {
+      const additionalPath = getRelativePathFromAdditionalSources(filePath, finalOptions.additionalModelSources);
+      if (additionalPath) {
+        relativePath = additionalPath;
+      } else if (finalOptions.generateExternalResources) {
+        // Fallback: extract just the filename for external models
+        const fileName = basename(filePath);
+        relativePath = `/${fileName}`;
+      }
     }
 
     outputPath = join(resolve(outputDir), relativePath.replace(/\.(js|ts)$/, '.schema.types.ts'));
