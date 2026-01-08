@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import { basename, dirname, join, resolve } from 'path';
 
-import { processIntermediateModelsToTraits } from './model-to-schema.js';
+import { processIntermediateModelsToTraits, willModelHaveExtension } from './model-to-schema.js';
 import type { TransformOptions } from './utils/ast-utils.js';
 import {
   debugLog,
@@ -884,6 +884,35 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   finalOptions.allModelFiles = modelFiles;
   finalOptions.allMixinFiles = mixinFiles;
 
+  // Pre-analyze which models will have extensions
+  // This allows imports to reference extension types instead of schema types for better type coverage
+  const modelsWithExtensions = new Set<string>();
+  if (!options.mixinsOnly) {
+    logger.info(`🔍 Analyzing which models will have extensions...`);
+    let analyzed = 0;
+    for (const modelFile of modelFiles) {
+      try {
+        const source = fileSourceCache.get(modelFile);
+        if (!source) continue;
+
+        if (willModelHaveExtension(modelFile, source, finalOptions)) {
+          const modelBaseName = extractBaseName(modelFile);
+          modelsWithExtensions.add(modelBaseName);
+        }
+        analyzed++;
+        if (analyzed % 100 === 0 && finalOptions.verbose) {
+          logger.info(`📊 Analyzed ${analyzed}/${modelFiles.length} models for extensions...`);
+        }
+      } catch (error) {
+        if (finalOptions.verbose) {
+          logger.error(`❌ Error analyzing model ${modelFile} for extensions: ${String(error)}`);
+        }
+      }
+    }
+    logger.info(`✅ Found ${modelsWithExtensions.size} models with extensions.`);
+  }
+  finalOptions.modelsWithExtensions = modelsWithExtensions;
+
   // Process intermediate models to generate trait artifacts first
   // This must be done before processing regular models that extend these intermediate models
   if (finalOptions.intermediateModelPaths && finalOptions.intermediateModelPaths.length > 0) {
@@ -964,10 +993,11 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     }
   }
 
-  // Pass the model-connected mixins to the transform options
+  // Pass the model-connected mixins and models with extensions to the transform options
   const enhancedOptions = {
     ...finalOptions,
     modelConnectedMixins,
+    modelsWithExtensions,
   };
 
   let processed = 0;

@@ -64,6 +64,8 @@ export interface TransformOptions {
     /** Import path for the Store type (e.g., 'soxhub-client/services/store') */
     import: string;
   };
+  /** Set of model base names that have extension files generated (for preferring extension imports) */
+  modelsWithExtensions?: Set<string>;
 }
 
 /**
@@ -202,9 +204,14 @@ function shouldImportFromTraits(relatedType: string, options?: TransformOptions)
 }
 
 /**
- * Transform a model type name to the appropriate import path (resource first, trait fallback)
- * Prioritizes resources, falls back to traits if no corresponding model exists
- * e.g., 'user' becomes 'my-app/data/resources/user.schema.types' if user model exists
+ * Transform a model type name to the appropriate import path
+ * Priority order:
+ * 1. Traits (for intermediate models/connected mixins)
+ * 2. Extensions (for models with extension files - gives full type with computed getters)
+ * 3. Resources (schema.types fallback)
+ *
+ * e.g., 'user' becomes 'my-app/data/extensions/user' if user has an extension
+ * e.g., 'user' becomes 'my-app/data/resources/user.schema.types' if no extension
  * e.g., 'shareable' becomes 'my-app/data/traits/shareable.schema.types' if only shareable mixin exists
  */
 export function transformModelToResourceImport(
@@ -222,6 +229,19 @@ export function transformModelToResourceImport(
       return `type { ${traitInterfaceName} as ${aliasName} } from '${traitsImport}/${relatedType}.schema.types'`;
     } else {
       return `type { ${traitInterfaceName} as ${aliasName} } from '../traits/${relatedType}.schema.types'`;
+    }
+  }
+
+  // Check if this model has an extension file - prefer extension imports for full type
+  // This gives consumers access to computed getters and other extension-defined properties
+  if (options?.modelsWithExtensions?.has(relatedType)) {
+    const extensionClassName = `${toPascalCase(relatedType)}Extension`;
+    const extensionsImport = options?.extensionsImport;
+    debugLog(options, `Model ${relatedType} has extension, importing from extension file`);
+    if (extensionsImport) {
+      return `type { ${extensionClassName} as ${modelName} } from '${extensionsImport}/${relatedType}'`;
+    } else {
+      return `type { ${extensionClassName} as ${modelName} } from '../extensions/${relatedType}'`;
     }
   }
 
@@ -912,14 +932,27 @@ function processImports(source: string, filePath: string, baseDir: string, optio
               options,
               `Found .schema.types import in TypeScript file, converting default to named: ${originalImport}`
             );
+
+            // Check if this is a trait import (from traits/ directory)
+            const isTraitImport = convertedImport.includes('/traits/');
+            // Extract the trait/resource base name from the import path
+            const pathMatch = convertedImport.match(/\/(traits|resources)\/([^/'"]+)\.schema\.types$/);
+            const baseName = pathMatch ? pathMatch[2] : null;
+
             // Convert "import type ModelName from 'path'" to "import type { ModelName } from 'path'"
             // Handle Model suffix by creating aliased imports
+            // Handle Trait imports by using the correct Trait suffix export name
             newImport = newImport.replace(
               /import\s+type\s+([A-Z][a-zA-Z0-9]*)\s+from/g,
               (_match: string, typeName: string) => {
                 if (typeName.endsWith('Model')) {
                   const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
                   return `import type { ${interfaceName} as ${typeName} } from`;
+                }
+                // For trait imports, the export is *Trait but the import name might not have Trait suffix
+                if (isTraitImport && baseName && !typeName.endsWith('Trait')) {
+                  const traitClassName = toPascalCase(baseName) + 'Trait';
+                  return `import type { ${traitClassName} as ${typeName} } from`;
                 }
                 return `import type { ${typeName} } from`;
               }
@@ -929,6 +962,10 @@ function processImports(source: string, filePath: string, baseDir: string, optio
               if (typeName.endsWith('Model')) {
                 const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
                 return `import type { ${interfaceName} as ${typeName} } from`;
+              }
+              if (isTraitImport && baseName && !typeName.endsWith('Trait')) {
+                const traitClassName = toPascalCase(baseName) + 'Trait';
+                return `import type { ${traitClassName} as ${typeName} } from`;
               }
               return `import type { ${typeName} } from`;
             });
@@ -940,8 +977,37 @@ function processImports(source: string, filePath: string, baseDir: string, optio
             );
             // For JavaScript files, we should not use TypeScript import type syntax
             // The import should remain as a regular import, not converted to named import
+          } else if (convertedImport.includes('/extensions/') && filePath.endsWith('.ts')) {
+            // Extension files export named classes with 'Extension' suffix
+            // Convert "import type User from '.../extensions/user'" to
+            // "import type { UserExtension as User } from '.../extensions/user'"
+            // Or "import type UserModel from '.../extensions/user'" to
+            // "import type { UserExtension as UserModel } from '.../extensions/user'"
+            debugLog(
+              options,
+              `Found extension import in TypeScript file, converting default to named: ${originalImport}`
+            );
+            // Extract the model base name from the import path to get correct Extension class name
+            const extensionPathMatch = convertedImport.match(/\/extensions\/([^/'"]+)$/);
+            const modelBaseName = extensionPathMatch ? extensionPathMatch[1] : null;
+            const extensionClassName = modelBaseName ? toPascalCase(modelBaseName) + 'Extension' : null;
+
+            if (extensionClassName) {
+              newImport = newImport.replace(
+                /import\s+type\s+([A-Z][a-zA-Z0-9]*)\s+from/g,
+                (_match: string, typeName: string) => {
+                  // Use the extension class name from the path, alias to the original import name
+                  return `import type { ${extensionClassName} as ${typeName} } from`;
+                }
+              );
+              // Also handle imports without 'type' keyword
+              newImport = newImport.replace(/import\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (_match: string, typeName: string) => {
+                return `import type { ${extensionClassName} as ${typeName} } from`;
+              });
+              debugLog(options, `Converted extension import to named import: ${newImport}`);
+            }
           } else {
-            debugLog(options, `Not a .schema.types import, skipping conversion: ${convertedImport}`);
+            debugLog(options, `Not a .schema.types or extension import, skipping conversion: ${convertedImport}`);
           }
 
           processedSource = processedSource.replace(originalImport, newImport);

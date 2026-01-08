@@ -369,6 +369,21 @@ function replacePattern(importPath: string, pattern: string, dir: string): strin
 }
 
 /**
+ * Check if a model file will produce an extension artifact
+ * This is used for pre-analysis to determine which models have extensions
+ * so that imports can reference extension types instead of schema types
+ */
+export function willModelHaveExtension(
+  filePath: string,
+  source: string,
+  options: TransformOptions
+): boolean {
+  const analysis = analyzeModelFile(filePath, source, options);
+  // A model has an extension if it has extension properties (computed props, methods, etc.)
+  return analysis.isValid && analysis.extensionProperties.length > 0;
+}
+
+/**
  * Process intermediate models to generate trait artifacts
  * This should be called before processing regular models that extend these intermediate models
  * Models are processed in dependency order to ensure base traits exist before dependent traits
@@ -646,29 +661,19 @@ function generateRegularModelArtifacts(
     });
   }
 
-  // Add import for extension signature interface if there are extension properties
-  if (extensionProperties.length > 0) {
-    const extensionSignatureInterface = `${modelName}ExtensionSignature`;
-    const extensionImport = options?.extensionsImport
-      ? `type { ${extensionSignatureInterface} } from '${options.extensionsImport}/${baseName}'`
-      : `type { ${extensionSignatureInterface} } from '../extensions/${baseName}'`;
-    schemaImports.add(extensionImport);
-  }
+  // Note: We don't import or extend ExtensionSignature in schema types to avoid
+  // circular references. The full type with extension properties is available
+  // by importing from the extension file (e.g., import { IssueExtension } from 'app/data/extensions/issue')
 
-  // Determine extends clause for schema interface - only include trait and extension interfaces
+  // Determine extends clause for schema interface - only include trait interfaces
+  // Note: We don't extend ExtensionSignature here to avoid circular references.
+  // The extension file's interface extends the schema type, and external code
+  // should import from extensions when they need the full type with extension properties.
   let extendsClause: string | undefined;
   if (mixinTraits.length > 0) {
     // Add trait interfaces to extends clause
     const traitInterfaces = mixinTraits.map((trait) => `${toPascalCase(trait)}Trait`);
     extendsClause = traitInterfaces.join(', ');
-  }
-  if (extensionProperties.length > 0) {
-    const extensionInterface = `${modelName}ExtensionSignature`;
-    if (extendsClause) {
-      extendsClause += `, ${extensionInterface}`;
-    } else {
-      extendsClause = extensionInterface;
-    }
   }
 
   const schemaTypeArtifact = createTypeArtifact(

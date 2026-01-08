@@ -308,5 +308,76 @@ describe('AST utilities', () => {
       const result2 = transformModelToResourceImport('shareable', 'Shareable', options);
       expect(result2).toBe("type { ShareableTrait as Shareable } from 'my-app/data/traits/shareable.schema.types'");
     });
+
+    it('prefers extension imports when model has extension', () => {
+      const options = {
+        modelsWithExtensions: new Set(['user', 'audit-survey']),
+        extensionsImport: 'my-app/data/extensions',
+        resourcesImport: 'my-app/data/resources',
+      };
+
+      // Test that model with extension routes to extension import
+      const result1 = transformModelToResourceImport('user', 'User', options);
+      expect(result1).toBe("type { UserExtension as User } from 'my-app/data/extensions/user'");
+
+      // Test that model with extension and different import name preserves alias
+      const result2 = transformModelToResourceImport('audit-survey', 'AuditSurvey', options);
+      expect(result2).toBe("type { AuditSurveyExtension as AuditSurvey } from 'my-app/data/extensions/audit-survey'");
+
+      // Test that model without extension falls back to schema.types
+      const result3 = transformModelToResourceImport('other-model', 'OtherModel', options);
+      expect(result3).toBe("type { OtherModel } from 'my-app/data/resources/other-model.schema.types'");
+    });
+
+    it('prefers extension imports over resource imports when both available', () => {
+      const options = {
+        modelsWithExtensions: new Set(['user']),
+        allModelFiles: ['/app/models/user.js', '/app/models/company.js'],
+        extensionsImport: 'my-app/data/extensions',
+        resourcesImport: 'my-app/data/resources',
+      };
+
+      // User has extension, should prefer extension import
+      const result1 = transformModelToResourceImport('user', 'User', options);
+      expect(result1).toBe("type { UserExtension as User } from 'my-app/data/extensions/user'");
+
+      // Company has model but no extension, should use resource import
+      const result2 = transformModelToResourceImport('company', 'Company', options);
+      expect(result2).toBe("type { Company } from 'my-app/data/resources/company.schema.types'");
+    });
+
+    it('handles empty modelsWithExtensions set', () => {
+      const options = {
+        modelsWithExtensions: new Set<string>(),
+        resourcesImport: 'my-app/data/resources',
+      };
+
+      const result = transformModelToResourceImport('user', 'User', options);
+      expect(result).toBe("type { User } from 'my-app/data/resources/user.schema.types'");
+    });
+
+    it('uses default extensions path when extensionsImport not provided', () => {
+      const options = {
+        modelsWithExtensions: new Set(['user']),
+        resourcesImport: 'my-app/data/resources',
+      };
+
+      const result = transformModelToResourceImport('user', 'User', options);
+      expect(result).toBe("type { UserExtension as User } from '../extensions/user'");
+    });
+
+    it('prioritizes trait imports over extension imports for intermediate models', () => {
+      const options = {
+        intermediateModelPaths: ['my-app/core/base-model'],
+        modelsWithExtensions: new Set(['base']), // Even if base has extension, trait takes priority
+        traitsImport: 'my-app/data/traits',
+        extensionsImport: 'my-app/data/extensions',
+        resourcesImport: 'my-app/data/resources',
+      };
+
+      // Intermediate models should always go to traits
+      const result = transformModelToResourceImport('base', 'Base', options);
+      expect(result).toBe("type { BaseTrait as Base } from 'my-app/data/traits/base.schema.types'");
+    });
   });
 });
