@@ -100,7 +100,7 @@ function analyzeModelMixinUsage(
       const source = fileSourceCache.get(modelFile);
       if (!source) continue;
 
-      // Extract direct mixin imports
+      // Extract direct mixin imports (including from .extend() calls)
       const mixinsUsedByModel = extractMixinImports(source, modelFile, options);
 
       modelsProcessed++;
@@ -131,7 +131,16 @@ function analyzeModelMixinUsage(
         }
       }
 
-      if (options.verbose && mixinsUsedByModel.length === 0 && polymorphicMixins.length === 0) {
+      // Check for type-only mixin imports (import type { MixinName } from 'path')
+      const typeOnlyMixins = extractTypeOnlyMixinReferences(source, modelFile, mixinFiles, options);
+      for (const mixinPath of typeOnlyMixins) {
+        modelMixins.add(mixinPath);
+        if (options.verbose) {
+          logger.info(`📋 Model ${modelFile} has type-only reference to mixin ${mixinPath}`);
+        }
+      }
+
+      if (options.verbose && mixinsUsedByModel.length === 0 && polymorphicMixins.length === 0 && typeOnlyMixins.length === 0) {
         logger.info(`📋 Model ${modelFile} uses no mixins`);
       }
     } catch (error) {
@@ -424,6 +433,53 @@ function extractPolymorphicMixinReferences(
   }
 
   return polymorphicMixins;
+}
+
+/**
+ * Extract mixins referenced via type-only imports (import type { MixinName } from 'path')
+ * These are often used for type annotations without actually extending the mixin
+ */
+function extractTypeOnlyMixinReferences(
+  source: string,
+  filePath: string,
+  mixinFiles: string[],
+  options: TransformOptions
+): string[] {
+  const typeOnlyMixins: string[] = [];
+
+  try {
+    const lang = getLanguageFromPath(filePath);
+    const ast = parse(lang, source);
+    const root = ast.root();
+
+    // Find all import statements
+    const importStatements = root.findAll({ rule: { kind: 'import_statement' } });
+
+    for (const importStatement of importStatements) {
+      const importText = importStatement.text();
+
+      // Check if this is a type-only import (import type ...)
+      if (!importText.includes('import type')) continue;
+
+      const sourceNode = importStatement.find({ rule: { kind: 'string' } });
+      if (!sourceNode) continue;
+
+      const importPath = sourceNode.text().replace(/['"]/g, '');
+
+      // Check if this import path resolves to a mixin file
+      const resolved = resolveMixinPath(importPath, filePath, options);
+      if (resolved && mixinFiles.includes(resolved)) {
+        if (!typeOnlyMixins.includes(resolved)) {
+          typeOnlyMixins.push(resolved);
+          debugLog(options, `Found type-only mixin reference: ${importPath} -> ${resolved}`);
+        }
+      }
+    }
+  } catch (error) {
+    debugLog(options, `Error extracting type-only mixin references from ${filePath}: ${String(error)}`);
+  }
+
+  return typeOnlyMixins;
 }
 
 /**

@@ -1093,4 +1093,70 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
     expect(existsSync(join(tempDir, 'app/data/extensions/js-model-with-mixin.js'))).toBe(true);
     expect(existsSync(join(tempDir, 'app/data/extensions/ts-mixin.ts'))).toBe(true);
   });
+
+  it('detects mixins referenced via type-only imports', async () => {
+    // Create a mixin file
+    const mixinSource = `
+import Mixin from '@ember/object/mixin';
+import { attr } from '@ember-data/model';
+
+export default Mixin.create({
+  auditStatus: attr('string'),
+  auditDate: attr('date')
+});
+`;
+
+    // Create a model that uses the mixin via type-only import
+    // This pattern is used when models have runtime mixin usage elsewhere
+    // but need the type for declarations
+    const modelWithTypeImport = `
+import Model, { attr, belongsTo } from '@ember-data/model';
+import type AuditableMixin from '../mixins/auditable';
+
+export default class AuditedRecord extends Model {
+  @attr('string') name;
+  @belongsTo('user', { async: false }) user;
+}
+`;
+
+    // Create a model that uses the mixin directly (for comparison)
+    const modelWithDirectUse = `
+import Model, { attr } from '@ember-data/model';
+import AuditableMixin from '../mixins/auditable';
+
+export default class AuditLog extends Model.extend(AuditableMixin) {
+  @attr('string') action;
+}
+`;
+
+    // Write files
+    const modelsDir = join(tempDir, 'app/models');
+    const mixinsDir = join(tempDir, 'app/mixins');
+    mkdirSync(modelsDir, { recursive: true });
+    mkdirSync(mixinsDir, { recursive: true });
+
+    writeFileSync(join(mixinsDir, 'auditable.ts'), mixinSource);
+    writeFileSync(join(modelsDir, 'audited-record.ts'), modelWithTypeImport);
+    writeFileSync(join(modelsDir, 'audit-log.ts'), modelWithDirectUse);
+
+    // Run migration
+    await runMigration(options);
+
+    // The mixin should be detected as connected (via type-only import OR direct use)
+    // and trait files should be generated
+    const traitSchemaPath = join(tempDir, 'app/data/traits/auditable.schema.ts');
+    const traitTypePath = join(tempDir, 'app/data/traits/auditable.schema.types.ts');
+
+    expect(existsSync(traitSchemaPath)).toBe(true);
+    expect(existsSync(traitTypePath)).toBe(true);
+
+    // Verify the trait contains the expected fields
+    const traitSchema = readFileSync(traitSchemaPath, 'utf-8');
+    expect(traitSchema).toContain('auditStatus');
+    expect(traitSchema).toContain('auditDate');
+
+    // Verify both models were processed
+    expect(existsSync(join(tempDir, 'app/data/resources/audited-record.schema.ts'))).toBe(true);
+    expect(existsSync(join(tempDir, 'app/data/resources/audit-log.schema.ts'))).toBe(true);
+  });
 });
