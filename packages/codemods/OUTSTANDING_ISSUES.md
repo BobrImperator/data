@@ -80,28 +80,36 @@ import type { DisplayableAmendmentChange } from 'soxhub-client/data/extensions/a
 
 ## Actionable Items for the Codemod
 
-| Issue | Count | Codemod Fix? | Notes |
-|-------|-------|--------------|-------|
-| Model methods (`belongsTo`, `isNew`, etc.) | ~50 | ✅ Yes | Add to base trait generation |
-| Missing trait files (`file.schema.types`) | ~20 | ✅ Yes | Ensure all mixins generate traits |
-| Wrong relative paths (`./app/models/...`) | ~10 | ✅ Yes | Fix path resolution in extensions |
-| Services on `this` | ~100 | ❌ No | Manual - keep services explicit |
-| Null checks | ~60 | ❌ No | Code issue, not codemod |
-| Type mismatches | ~100 | ❌ No | Code issue, not codemod |
-| Implicit any | ~42 | ❌ No | Code issue, not codemod |
-| Non-exported interfaces | ~8 | ⚠️ Maybe | Export them in extension generation |
+| Issue | Count | Codemod Fix? | Status | Notes |
+|-------|-------|--------------|--------|-------|
+| Model methods (`belongsTo`, `isNew`, etc.) | ~50 | ✅ Yes | ✅ FIXED | Added Model base properties to trait types |
+| Missing trait files (`file.schema.types`) | ~20 | ✅ Yes | ✅ FIXED | Enhanced mixin detection with type-only imports |
+| Wrong relative paths (`./app/models/...`) | ~10 | ✅ Yes | ✅ FIXED | Dynamic path calculation for extensions |
+| Non-exported interfaces | ~8 | ⚠️ Maybe | ✅ FIXED | Preserve exports for interfaces/type aliases |
+| Services on `this` | ~100 | ❌ No | — | Manual - keep services explicit |
+| Null checks | ~60 | ❌ No | — | Code issue, not codemod |
+| Type mismatches | ~100 | ❌ No | — | Code issue, not codemod |
+| Implicit any | ~42 | ❌ No | — | Code issue, not codemod |
 
-## Priority Fixes for Codemod
+## Completed Fixes
 
-### High Priority
-1. **Add model methods to base trait** - Would fix ~50 errors
-2. **Fix wrong relative paths in extensions** - Would fix ~10 errors
-3. **Ensure missing traits are generated** - Would fix ~20 errors
+### Issue 1: Add Model Base Methods to Traits (ed2756848)
+Added all EmberData Model properties and methods to generated trait interfaces:
+- State properties: `isNew`, `hasDirtyAttributes`, `isDeleted`, `isSaving`, etc.
+- Lifecycle methods: `save()`, `reload()`, `deleteRecord()`, `rollbackAttributes()`
+- Relationship methods: `belongsTo()`, `hasMany()`
+- Error handling: `errors`, `adapterError`
 
-### Medium Priority
-4. **Export local interfaces in extensions** - Would fix ~8 errors
+### Issue 2: Fix Relative Path Resolution (9fbd003f5)
+Dynamic calculation of relative import paths for extensions based on actual source/target directories instead of hardcoded assumptions.
 
-### Not Codemod Issues (Manual Fixes)
+### Issue 3: Enhance Mixin Detection (72d0df330)
+Added detection for mixins referenced via `import type` statements, ensuring traits are generated for type-only mixin imports.
+
+### Issue 4: Export Supporting Types (b13c0d024)
+Preserve `export` keyword for interfaces and type aliases in generated extensions, allowing other files to import supporting types.
+
+## Not Codemod Issues (Manual Fixes Required)
 - Services on `this` - Extensions need to declare services explicitly
 - Null checks - Code needs optional chaining or guards
 - Type mismatches - Code needs type assertions or fixes
