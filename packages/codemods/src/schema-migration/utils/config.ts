@@ -27,7 +27,9 @@ export interface ConfigOptions {
   generateExternalResources?: boolean;
   config?: string;
   input?: string;
+  inputDir?: string;
   output?: string;
+  outputDir?: string;
   runPostTransformLinting?: boolean;
   runPostTransformPrettier?: boolean;
   eslintConfigPath?: string;

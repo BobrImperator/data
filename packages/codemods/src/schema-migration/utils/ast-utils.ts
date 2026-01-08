@@ -66,6 +66,8 @@ export interface TransformOptions {
   };
   /** Set of model base names that have extension files generated (for preferring extension imports) */
   modelsWithExtensions?: Set<string>;
+  /** Generate resource schemas for external (non-local) model files */
+  generateExternalResources?: boolean;
 }
 
 /**

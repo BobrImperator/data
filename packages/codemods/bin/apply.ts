@@ -6,7 +6,8 @@ import jscodeshift from 'jscodeshift';
 import path from 'path';
 
 import type { Options as LegacyCompatBuildersOptions } from '../src/legacy-compat-builders/options.js';
-import { type ConfigOptions,loadConfig, mergeOptions } from '../src/schema-migration/utils/config.js';
+import type { MigrateOptions } from '../src/schema-migration/migrate-to-schema.js';
+import { type ConfigOptions, loadConfig, mergeOptions } from '../src/schema-migration/utils/config.js';
 import type { SharedCodemodOptions } from '../src/utils/options.js';
 import { logger } from '../utils/logger.js';
 import type { CodemodConfig } from './config.js';
@@ -112,8 +113,10 @@ function createApplyAction(transformName: string) {
       }
 
       // Merge CLI options with config options (CLI takes precedence)
-      const cliOptions = {
-        ...options,
+      // Exclude verbose from spread to avoid type conflict (CLI uses '0'|'1'|'2', ConfigOptions uses boolean)
+      const { verbose: _verboseRaw, ...restOptions } = options;
+      const cliOptions: ConfigOptions = {
+        ...restOptions,
         inputDir,
         ...(options.dry !== undefined && { dryRun: Boolean(options.dry) }),
         ...(options.verbose !== undefined && { verbose: options.verbose === '1' || options.verbose === '2' }),
@@ -130,7 +133,23 @@ function createApplyAction(transformName: string) {
           ? options.intermediateModelPaths
           : options.intermediateModelPaths ? [options.intermediateModelPaths] : undefined,
       };
-      const migrationOptions = mergeOptions(cliOptions, configOptions);
+      const mergedOptions = mergeOptions(cliOptions, configOptions);
+
+      // Normalize options after merge (config file may have different types)
+      const normalizedIntermediateModelPaths = Array.isArray(mergedOptions.intermediateModelPaths)
+        ? mergedOptions.intermediateModelPaths
+        : mergedOptions.intermediateModelPaths ? [mergedOptions.intermediateModelPaths] : undefined;
+
+      // typeMapping may be a JSON string in config files, parse it if needed
+      const normalizedTypeMapping = typeof mergedOptions.typeMapping === 'string'
+        ? JSON.parse(mergedOptions.typeMapping) as Record<string, string>
+        : mergedOptions.typeMapping;
+
+      const migrationOptions: MigrateOptions = {
+        ...mergedOptions,
+        intermediateModelPaths: normalizedIntermediateModelPaths,
+        typeMapping: normalizedTypeMapping,
+      };
 
       try {
         await runMigration(migrationOptions);
