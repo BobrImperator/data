@@ -21,6 +21,7 @@ describe('migrate-to-schema batch operation', () => {
       extensionsDir: join(tempDir, 'app/data/extensions'),
       modelSourceDir: join(tempDir, 'app/models'),
       mixinSourceDir: join(tempDir, 'app/mixins'),
+      appImportPrefix: 'test-app',
       resourcesImport: 'test-app/data/resources',
       traitsImport: 'test-app/data/traits',
       extensionsImport: 'test-app/data/extensions',

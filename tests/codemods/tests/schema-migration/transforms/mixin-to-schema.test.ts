@@ -440,7 +440,9 @@ const BaseModelMixin = Mixin.create(BaseModelDate, PartialSaveable, {
 export default BaseModelMixin;
 `.trim();
 
-      const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource);
+      const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource, {
+        appImportPrefix: "test-app"
+      });
 
       // Should find both trait fields and extension properties
       expect(artifacts.length).toBeGreaterThan(0);
@@ -496,7 +498,9 @@ const BaseModelMixin = Mixin.create(BaseModelDate, PartialSaveable, {
 export default BaseModelMixin;
 `.trim();
 
-      const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource);
+      const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource, {
+        appImportPrefix: 'test-app'
+      });
 
       expect(artifacts.length).toBeGreaterThan(0);
 
@@ -581,7 +585,9 @@ export default Mixin.createWithMixins(BaseModelMixin, TimestampMixin, {
 	files: hasMany('file', { async: false })
 });`;
 
-      const artifacts = toArtifacts('app/mixins/fileable.js', input, {});
+      const artifacts = toArtifacts('app/mixins/fileable.js', input, {
+        appImportPrefix: 'test-app'
+      });
 
       // Should produce trait and type artifacts (no extension since no methods/computed properties)
       expect(artifacts).toHaveLength(2);
@@ -621,7 +627,9 @@ export default Mixin.createWithMixins(BaseModelMixin, {
 	description: attr('string')
 });`;
 
-      const artifacts = toArtifacts('app/mixins/describable.js', input, {});
+      const artifacts = toArtifacts('app/mixins/describable.js', input, {
+        appImportPrefix: 'test-app',
+      });
 
       const trait = artifacts.find((a) => a.type === 'trait');
       const typeArtifact = artifacts.find((a) => a.type === 'trait-type');
@@ -682,6 +690,7 @@ export default Mixin.create({
         modelImportSource: 'test-app/models',
         resourcesImport: 'test-app/data/resources',
         resourcesDir: './test-output/resources',
+        appImportPrefix: 'test-app',
         verbose: false,
         debug: false,
       };
@@ -723,6 +732,7 @@ export default Mixin.create({
         modelImportSource: 'test-app/models',
         resourcesImport: 'test-app/data/resources',
         resourcesDir: './test-output/resources',
+        appImportPrefix: 'test-app',
         verbose: false,
         debug: false,
       };

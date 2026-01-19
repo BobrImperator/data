@@ -140,7 +140,12 @@ function analyzeModelMixinUsage(
         }
       }
 
-      if (options.verbose && mixinsUsedByModel.length === 0 && polymorphicMixins.length === 0 && typeOnlyMixins.length === 0) {
+      if (
+        options.verbose &&
+        mixinsUsedByModel.length === 0 &&
+        polymorphicMixins.length === 0 &&
+        typeOnlyMixins.length === 0
+      ) {
         logger.info(`📋 Model ${modelFile} uses no mixins`);
       }
     } catch (error) {
@@ -217,7 +222,7 @@ function isIntermediateModel(
   const fileBaseName = basename(filePath, extname(filePath));
 
   for (const intermediatePath of intermediateModelPaths) {
-    // Handle paths with extensions (e.g., "soxhub-client/core/base-model.js")
+    // Handle paths with extensions (e.g., "my-app/core/base-model.js")
     const intermediateBaseName = basename(intermediatePath, extname(intermediatePath));
 
     if (fileBaseName === intermediateBaseName) {
@@ -756,7 +761,7 @@ function resolveMixinPath(importPath: string, currentFilePath: string, options: 
     // If not found in external sources, try to resolve in local mixins directory
     const mixinSourceDir = resolve(options.mixinSourceDir || './app/mixins');
 
-    // For local module imports like 'soxhub-client/mixins/foo', extract just the last part
+    // For local module imports like 'my-app/mixins/foo', extract just the last part
     const localMixinPath = importPath.includes('/mixins/') ? importPath.split('/mixins/')[1] : importPath;
 
     const localResolvedPath = resolve(mixinSourceDir, localMixinPath);
@@ -859,7 +864,9 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
           filesToProcess.push(...regularModelFiles);
 
           if (finalOptions.verbose) {
-            logger.info(`📋 Found ${regularModelFiles.length} additional model files from ${source.pattern} (${additionalModelFiles.length - regularModelFiles.length} intermediate models excluded)`);
+            logger.info(
+              `📋 Found ${regularModelFiles.length} additional model files from ${source.pattern} (${additionalModelFiles.length - regularModelFiles.length} intermediate models excluded)`
+            );
           }
         } catch (error: unknown) {
           logger.error(`Failed to process additional model source ${source.pattern}: ${String(error)}`);

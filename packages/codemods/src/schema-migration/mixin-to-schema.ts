@@ -133,7 +133,6 @@ export interface ${typeName} {
  * Transform to convert Ember mixins to WarpDrive LegacyTrait patterns
  */
 export default function transform(filePath: string, source: string, options: TransformOptions): string {
-
   return withTransformWrapper(
     filePath,
     source,
@@ -155,7 +154,6 @@ export default function transform(filePath: string, source: string, options: Tra
  * files to the requested output directories.
  */
 export function toArtifacts(filePath: string, source: string, options: TransformOptions): TransformArtifact[] {
-
   // Process all mixins - polymorphic mixins may not be "connected" but still need traits for relationships
 
   const lang = getLanguageFromPath(filePath);
@@ -167,7 +165,6 @@ export function toArtifacts(filePath: string, source: string, options: Transform
     // Verify this is an ember mixin file we should consider
     const expectedSources = [DEFAULT_MIXIN_SOURCE];
     const mixinImportLocal = findEmberImportLocalName(root, expectedSources, options, filePath, process.cwd());
-
 
     if (!mixinImportLocal) {
       debugLog(options, 'No mixin import found, returning empty artifacts');
@@ -186,7 +183,6 @@ export function toArtifacts(filePath: string, source: string, options: Transform
       return [];
     }
 
-
     debugLog(options, 'Found default export, checking if it uses mixin');
 
     const isDirect = isDirectMixinCreateExport(defaultExportNode, mixinImportLocal);
@@ -194,10 +190,8 @@ export function toArtifacts(filePath: string, source: string, options: Transform
 
     debugLog(options, `Direct mixin create export: ${isDirect}`);
 
-
     if (!ok) {
       const exportedIdentifier = getExportedIdentifier(defaultExportNode, options);
-
 
       if (
         exportedIdentifier &&
@@ -232,7 +226,10 @@ export function toArtifacts(filePath: string, source: string, options: Transform
     );
 
     if (mixinName.toLowerCase().includes('basemodel')) {
-      debugLog(options, `🔍 BASEMODEL DEBUG: Found ${extendedTraits.length} extended traits: ${extendedTraits.join(', ')}`);
+      debugLog(
+        options,
+        `🔍 BASEMODEL DEBUG: Found ${extendedTraits.length} extended traits: ${extendedTraits.join(', ')}`
+      );
       debugLog(options, `🔍 BASEMODEL DEBUG: Found ${traitFields.length} trait fields`);
       debugLog(options, `🔍 BASEMODEL DEBUG: Found ${extensionProperties.length} extension properties`);
     }
@@ -244,8 +241,8 @@ export function toArtifacts(filePath: string, source: string, options: Transform
 
     // Check if this mixin is connected to models (directly or transitively)
     // In test environment, treat all mixins as connected unless explicitly specified
-    const isConnectedToModel = options?.modelConnectedMixins?.has(filePath) ??
-      (process.env.NODE_ENV === 'test' || options?.testMode === true);
+    const isConnectedToModel =
+      options?.modelConnectedMixins?.has(filePath) ?? (process.env.NODE_ENV === 'test' || options?.testMode === true);
 
     if (!isConnectedToModel) {
       debugLog(options, `Skipping ${mixinName}: not connected to any models`);
@@ -253,7 +250,6 @@ export function toArtifacts(filePath: string, source: string, options: Transform
     }
 
     // Continue with artifact generation even if empty - needed for polymorphic relationships
-
 
     const artifacts: TransformArtifact[] = [];
     const fileExtension = getFileExtension(filePath);
@@ -274,32 +270,32 @@ export function toArtifacts(filePath: string, source: string, options: Transform
     // Always generate trait type interface, even for empty mixins (needed for polymorphic relationships)
     // Convert trait fields to TypeScript interface properties
     const traitFieldTypes = traitFields.map((field) => {
-    let type: string;
-    switch (field.kind) {
-      case 'attribute':
-        type = getTypeScriptTypeForAttribute(
-          field.type || 'unknown',
-          !!(field.options && 'defaultValue' in field.options),
-          !field.options || field.options.allowNull !== false,
-          options,
-          field.options
-        ).tsType;
-        break;
-      case 'belongsTo':
-        type = getTypeScriptTypeForBelongsTo(field, options);
-        break;
-      case 'hasMany':
-        type = getTypeScriptTypeForHasMany(field, options);
-        break;
-      default:
-        type = 'unknown';
-    }
+      let type: string;
+      switch (field.kind) {
+        case 'attribute':
+          type = getTypeScriptTypeForAttribute(
+            field.type || 'unknown',
+            !!(field.options && 'defaultValue' in field.options),
+            !field.options || field.options.allowNull !== false,
+            options,
+            field.options
+          ).tsType;
+          break;
+        case 'belongsTo':
+          type = getTypeScriptTypeForBelongsTo(field, options);
+          break;
+        case 'hasMany':
+          type = getTypeScriptTypeForHasMany(field, options);
+          break;
+        default:
+          type = 'unknown';
+      }
 
-    return {
-      name: field.name,
-      type,
-      readonly: false,
-    };
+      return {
+        name: field.name,
+        type,
+        readonly: false,
+      };
     });
 
     // Convert extended traits to extends clause format
@@ -347,10 +343,18 @@ export function toArtifacts(filePath: string, source: string, options: Transform
 
     // Add imports for extended traits
     if (extendedTraits.length > 0) {
-      const traitsImport = options?.traitsImport || 'soxhub-client/data/traits';
+      console.log(options)
+      // Use traitsImport if configured, otherwise construct from appImportPrefix
+      const traitsImport =
+        `${options.appImportPrefix}/data/traits`;
       for (const trait of extendedTraits) {
         const extendedTraitName = `${toPascalCase(trait)}Trait`;
-        imports.add(`type { ${extendedTraitName} } from '${traitsImport}/${trait}.schema.types'`);
+        if (traitsImport) {
+          imports.add(`type { ${extendedTraitName} } from '${traitsImport}/${trait}.schema.types'`);
+        } else {
+          // Fallback to relative import if no import prefix is configured
+          imports.add(`type { ${extendedTraitName} } from './${trait}.schema.types'`);
+        }
       }
     }
 
@@ -381,7 +385,7 @@ export function toArtifacts(filePath: string, source: string, options: Transform
         options,
         traitInterfaceName,
         traitImportPath,
-        'mixin'  // Source is a mixin file
+        'mixin' // Source is a mixin file
       );
 
       if (extensionArtifact) {
@@ -402,7 +406,6 @@ export function toArtifacts(filePath: string, source: string, options: Transform
  */
 function handleMixinTransform(root: SgNode, source: string, filePath: string, options: TransformOptions): string {
   try {
-
     // Process all mixins - polymorphic mixins may not be "connected" but still need processing
 
     // Resolve local identifier used for the Mixin default import
@@ -515,7 +518,6 @@ function isIdentifierInitializedByMixinCreate(
 ): boolean {
   debugLog(options, `Checking if identifier '${ident}' is initialized by '${localMixin}.create()'`);
 
-
   // Find all variable declarations (both var and const/let)
   const variableDeclarations = [
     ...root.findAll({ rule: { kind: 'variable_declaration' } }),
@@ -523,7 +525,6 @@ function isIdentifierInitializedByMixinCreate(
   ];
 
   debugLog(options, `Found ${variableDeclarations.length} variable declarations`);
-
 
   for (const varDecl of variableDeclarations) {
     debugLog(options, `Variable declaration: ${varDecl.text()}`);
@@ -553,12 +554,10 @@ function isIdentifierInitializedByMixinCreate(
         }
       }
 
-
       if (!valueNode || valueNode.kind() !== 'call_expression') {
         debugLog(options, `Value is not a call expression: ${valueNode?.kind()}`);
         continue;
       }
-
 
       debugLog(options, `Found call expression: ${valueNode.text()}`);
 
@@ -615,7 +614,13 @@ function extractTraitFields(
   extendedTraits: string[];
 } {
   const traitFields: Array<{ name: string; kind: string; type?: string; options?: Record<string, unknown> }> = [];
-  const extensionProperties: Array<{ name: string; originalKey: string; value: string; typeInfo?: ExtractedType; isObjectMethod?: boolean }> = [];
+  const extensionProperties: Array<{
+    name: string;
+    originalKey: string;
+    value: string;
+    typeInfo?: ExtractedType;
+    isObjectMethod?: boolean;
+  }> = [];
   const extendedTraits: string[] = [];
 
   // Look for associated interface in the same file
@@ -702,11 +707,17 @@ function extractTraitFields(
   }
 
   // For regular create() calls with mixin references, extract extended traits from non-object arguments
-  debugLog(options, `Processing Mixin.create arguments for ${mixinName}: ${argChildren.length} total args, ${objectLiterals.length} object literals`);
+  debugLog(
+    options,
+    `Processing Mixin.create arguments for ${mixinName}: ${argChildren.length} total args, ${objectLiterals.length} object literals`
+  );
   if (objectLiterals.length > 0 && argChildren.length > 1) {
     for (let i = 0; i < argChildren.length; i++) {
       const arg = argChildren[i];
-      debugLog(options, `  Arg ${i}: kind=${arg.kind()}, text='${arg.text()}', isObjectLiteral=${arg === objectLiteral}`);
+      debugLog(
+        options,
+        `  Arg ${i}: kind=${arg.kind()}, text='${arg.text()}', isObjectLiteral=${arg === objectLiteral}`
+      );
       if (arg.kind() === 'identifier' && arg !== objectLiteral) {
         const extendedMixinName = arg.text();
         // Convert mixin name to dasherized trait name
@@ -849,7 +860,6 @@ function extractTraitFields(
  */
 // NOTE: previously we supported generating a split of trait + extension. The
 // new behavior only replaces the mixin export and preserves the rest of the file.
-
 
 /**
  * Generate LegacyTrait schema object

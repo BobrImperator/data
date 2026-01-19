@@ -49,7 +49,7 @@ describe('generateConfig', () => {
 
   it('should save configuration file after gathering input', async () => {
     // Mock successful configuration generation
-    const mockConfig = { mirror: true, emberDataImportSource: '@ember-data/model' };
+    const mockConfig = { mirror: true, emberDataImportSource: '@ember-data/model', appImportPrefix: 'test-app' };
     vi.mocked(generateConfig).mockResolvedValueOnce(mockConfig);
 
     const result = await generateConfig();
@@ -59,7 +59,7 @@ describe('generateConfig', () => {
 
   it('should call inquirer.prompt at least once', async () => {
     // Mock basic config return
-    const mockConfig = { mirror: false, emberDataImportSource: '@ember-data/model' };
+    const mockConfig = { mirror: false, emberDataImportSource: '@ember-data/model', appImportPrefix: 'test-app' };
     vi.mocked(generateConfig).mockResolvedValueOnce(mockConfig);
 
     const result = await generateConfig();

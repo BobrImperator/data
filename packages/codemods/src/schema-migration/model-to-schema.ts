@@ -414,11 +414,7 @@ function replacePattern(importPath: string, pattern: string, dir: string): strin
  * This is used for pre-analysis to determine which models have extensions
  * so that imports can reference extension types instead of schema types
  */
-export function willModelHaveExtension(
-  filePath: string,
-  source: string,
-  options: TransformOptions
-): boolean {
+export function willModelHaveExtension(filePath: string, source: string, options: TransformOptions): boolean {
   const analysis = analyzeModelFile(filePath, source, options);
   // A model has an extension if it has extension properties (computed props, methods, etc.)
   return analysis.isValid && analysis.extensionProperties.length > 0;
@@ -830,7 +826,7 @@ function generateIntermediateModelTraitArtifacts(
   const artifacts: TransformArtifact[] = [];
 
   // Extract the trait name from the model path
-  // e.g., "soxhub-client/core/data-field-model" -> "data-field"
+  // e.g., "my-app/core/data-field-model" -> "data-field"
   const traitBaseName =
     modelPath
       .split('/')
@@ -1777,7 +1773,7 @@ function extractIntermediateModelTraits(
       });
 
       if (modelPath) {
-        // Convert path like "soxhub-client/core/data-field-model" to "data-field-model"
+        // Convert path like "my-app/core/data-field-model" to "data-field-model"
         let traitName = modelPath.split('/').pop() || modelPath;
         // Strip any file extension (.js, .ts)
         traitName = traitName.replace(/\.[jt]s$/, '');
@@ -1800,7 +1796,7 @@ function extractIntermediateModelTraits(
 /**
  * Check if an import path represents a local mixin (not an external dependency)
  */
-function isLocalMixin(importPath: string): boolean {
+function isLocalMixin(importPath: string, options?: TransformOptions): boolean {
   // Node modules don't have slashes at the beginning or are package names
   if (!importPath.includes('/')) {
     return false; // Simple package name like 'lodash'
@@ -1811,13 +1807,21 @@ function isLocalMixin(importPath: string): boolean {
     return true;
   }
 
+  // Check if this matches the configured app import prefix
+  if (options?.appImportPrefix && importPath.startsWith(options.appImportPrefix + '/')) {
+    return true;
+  }
+
+  // Check if this matches the configured model or mixin import sources
+  if (options?.modelImportSource && importPath.startsWith(options.modelImportSource)) {
+    return true;
+  }
+  if (options?.mixinImportSource && importPath.startsWith(options.mixinImportSource)) {
+    return true;
+  }
+
   // Absolute paths that include common local directories are likely local
-  if (
-    importPath.includes('/mixins/') ||
-    importPath.startsWith('app/') ||
-    importPath.startsWith('addon/') ||
-    importPath.startsWith('soxhub-client/')
-  ) {
+  if (importPath.includes('/mixins/') || importPath.startsWith('app/') || importPath.startsWith('addon/')) {
     return true;
   }
 
@@ -1882,7 +1886,7 @@ function extractMixinTraits(
         const importPath = mixinImports.get(mixinName);
 
         // Skip external node module dependencies (but not local app mixins)
-        if (importPath && !isLocalMixin(importPath)) {
+        if (importPath && !isLocalMixin(importPath, options)) {
           debugLog(
             options,
             `DEBUG: Skipping ${mixinName} as it's an external dependency (${importPath}), not a local mixin`

@@ -19,7 +19,7 @@ export interface TransformOptions {
   allModelFiles?: string[];
   /** Specify alternate import sources for EmberData decorators (default: '@ember-data/model') */
   emberDataImportSource?: string;
-  /** List of intermediate model class import paths that should be converted to traits (e.g., ['soxhub-client/core/base-model', 'soxhub-client/core/data-field-model']) */
+  /** List of intermediate model class import paths that should be converted to traits (e.g., ['my-app/core/base-model', 'my-app/core/data-field-model']) */
   intermediateModelPaths?: string[];
   /** List of intermediate fragment class import paths that should be converted to traits (e.g., ['app/fragments/base-fragment']) */
   intermediateFragmentPaths?: string[];
@@ -37,6 +37,8 @@ export interface TransformOptions {
   additionalModelSources?: Array<{ pattern: string; dir: string }>;
   /** Additional mixin source patterns and their corresponding directories */
   additionalMixinSources?: Array<{ pattern: string; dir: string }>;
+  /** Base import prefix for the application (e.g., 'my-app') */
+  appImportPrefix: string;
   /** Specify base import path for new resource type imports (required) */
   resourcesImport?: string;
   /** Directory to write generated resource schemas to */
@@ -61,7 +63,7 @@ export interface TransformOptions {
   storeType?: {
     /** Name of the Store type (default: 'Store') */
     name?: string;
-    /** Import path for the Store type (e.g., 'soxhub-client/services/store') */
+    /** Import path for the Store type (e.g., 'my-app/services/store') */
     import: string;
   };
   /** Set of model base names that have extension files generated (for preferring extension imports) */
@@ -185,7 +187,7 @@ function shouldImportFromTraits(relatedType: string, options?: TransformOptions)
   if (intermediateModelPaths) {
     for (const modelPath of intermediateModelPaths) {
       // Extract the trait name from the model path using the same logic as generateIntermediateModelTraitArtifacts
-      // e.g., "soxhub-client/core/data-field-model" -> "data-field"
+      // e.g., "my-app/core/data-field-model" -> "data-field"
       const traitBaseName =
         modelPath
           .split('/')
@@ -300,21 +302,34 @@ export function extractTypeNameMapping(root: SgNode, options?: TransformOptions)
     // Find all import declarations
     const imports = root.findAll({ rule: { kind: 'import_statement' } });
 
+    // Build the model import pattern from configuration
+    const modelImportSource = options?.modelImportSource;
+
     for (const importNode of imports) {
       const importText = importNode.text();
 
-      // Match default imports from model paths
-      // Pattern: import type SomeName from './some-path' or 'soxhub-client/models/some-path'
-      const defaultImportMatch = importText.match(
-        /import\s+type\s+(\w+)\s+from\s+['"](?:\.\/([^'"]+)|soxhub-client\/models\/([^'"]+))['"];?/
-      );
+      // Build regex pattern dynamically based on configuration
+      // Pattern: import type SomeName from './some-path' or '{modelImportSource}/some-path'
+      let regexPattern: RegExp;
+      if (modelImportSource) {
+        // Escape special regex characters in the import source
+        const escapedModelImportSource = modelImportSource.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        regexPattern = new RegExp(
+          `import\\s+type\\s+(\\w+)\\s+from\\s+['"](?:\\.\\/([^'"]+)|${escapedModelImportSource}\\/([^'"]+))['"];?`
+        );
+      } else {
+        // Fallback to only matching relative imports
+        regexPattern = /import\s+type\s+(\w+)\s+from\s+['"]\.\/([^'"]+)['"];?/;
+      }
+
+      const defaultImportMatch = importText.match(regexPattern);
 
       if (defaultImportMatch) {
         const [, importName, relativePath, absolutePath] = defaultImportMatch;
         const modelPath = relativePath || absolutePath;
 
         if (modelPath) {
-          // Extract the model type from the path (e.g., "user" from "./user" or "soxhub-client/models/user")
+          // Extract the model type from the path (e.g., "user" from "./user" or "my-app/models/user")
           const modelType = modelPath
             .replace(/\.(js|ts)$/, '')
             .split('/')
@@ -566,8 +581,11 @@ export function getMixinImports(root: SgNode, options?: TransformOptions): Map<s
     let actualImportPath = importPath;
     if (isSpecialMixinImport(importPath, options)) {
       // Convert special mixin import to actual mixin path
-      if (importPath === 'soxhub-client/models/workflowable') {
-        actualImportPath = 'soxhub-client/mixins/workflowable';
+      // Use the configured modelImportSource and mixinImportSource
+      const modelImportSource = options?.modelImportSource;
+      const mixinImportSource = options?.mixinImportSource;
+      if (modelImportSource && mixinImportSource && importPath === `${modelImportSource}/workflowable`) {
+        actualImportPath = `${mixinImportSource}/workflowable`;
       }
     }
 
@@ -960,17 +978,20 @@ function processImports(source: string, filePath: string, baseDir: string, optio
               }
             );
             // Also handle imports without 'type' keyword
-            newImport = newImport.replace(/import\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (_match: string, typeName: string) => {
-              if (typeName.endsWith('Model')) {
-                const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
-                return `import type { ${interfaceName} as ${typeName} } from`;
+            newImport = newImport.replace(
+              /import\s+([A-Z][a-zA-Z0-9]*)\s+from/g,
+              (_match: string, typeName: string) => {
+                if (typeName.endsWith('Model')) {
+                  const interfaceName = typeName.slice(0, -5); // Remove 'Model' suffix
+                  return `import type { ${interfaceName} as ${typeName} } from`;
+                }
+                if (isTraitImport && baseName && !typeName.endsWith('Trait')) {
+                  const traitClassName = toPascalCase(baseName) + 'Trait';
+                  return `import type { ${traitClassName} as ${typeName} } from`;
+                }
+                return `import type { ${typeName} } from`;
               }
-              if (isTraitImport && baseName && !typeName.endsWith('Trait')) {
-                const traitClassName = toPascalCase(baseName) + 'Trait';
-                return `import type { ${traitClassName} as ${typeName} } from`;
-              }
-              return `import type { ${typeName} } from`;
-            });
+            );
             debugLog(options, `Converted default import to named import: ${newImport}`);
           } else if (convertedImport.includes('.schema.types') && filePath.endsWith('.js')) {
             debugLog(
@@ -1003,9 +1024,12 @@ function processImports(source: string, filePath: string, baseDir: string, optio
                 }
               );
               // Also handle imports without 'type' keyword
-              newImport = newImport.replace(/import\s+([A-Z][a-zA-Z0-9]*)\s+from/g, (_match: string, typeName: string) => {
-                return `import type { ${extensionClassName} as ${typeName} } from`;
-              });
+              newImport = newImport.replace(
+                /import\s+([A-Z][a-zA-Z0-9]*)\s+from/g,
+                (_match: string, typeName: string) => {
+                  return `import type { ${extensionClassName} as ${typeName} } from`;
+                }
+              );
               debugLog(options, `Converted extension import to named import: ${newImport}`);
             }
           } else {
@@ -1099,7 +1123,9 @@ function isMixinImportPath(importPath: string, options?: TransformOptions): bool
  */
 function isSpecialMixinImport(importPath: string, options?: TransformOptions): boolean {
   // Special case: workflowable is imported from models but is actually a mixin
-  if (importPath === 'soxhub-client/models/workflowable') {
+  // Use the configured modelImportSource to detect this pattern
+  const modelImportSource = options?.modelImportSource;
+  if (modelImportSource && importPath === `${modelImportSource}/workflowable`) {
     return true;
   }
 
@@ -1113,8 +1139,18 @@ function isSpecialMixinImport(importPath: string, options?: TransformOptions): b
 function resolveSpecialMixinImport(importPath: string, baseDir: string, options?: TransformOptions): string | null {
   try {
     // Special case: workflowable from models -> mixins/workflowable
-    if (importPath === 'soxhub-client/models/workflowable') {
-      const mixinPath = `${baseDir}/apps/client/app/mixins/workflowable.js`;
+    // Use the configured modelImportSource and mixinSourceDir to resolve
+    const modelImportSource = options?.modelImportSource;
+    if (modelImportSource && importPath === `${modelImportSource}/workflowable`) {
+      // Use the configured mixin source directory, or fall back to deriving from the app import prefix
+      const mixinSourceDir = options?.mixinSourceDir;
+      if (mixinSourceDir) {
+        const mixinPath = `${mixinSourceDir}/workflowable.js`;
+        debugLog(options, `Resolved special mixin import ${importPath} to: ${mixinPath}`);
+        return mixinPath;
+      }
+      // Fallback: try to infer from baseDir
+      const mixinPath = `${baseDir}/app/mixins/workflowable.js`;
       debugLog(options, `Resolved special mixin import ${importPath} to: ${mixinPath}`);
       return mixinPath;
     }
@@ -1153,7 +1189,7 @@ function resolveAbsoluteMixinImport(importPath: string, baseDir: string, options
     }
 
     // Extract the mixin name from the import path
-    // e.g., 'soxhub-client/mixins/permissable' -> 'permissable'
+    // e.g., 'my-app/mixins/permissable' -> 'permissable'
     const mixinName = importPath.replace(mixinSource.pattern, '');
 
     // Construct the file path (mixinSource.dir is already an absolute path)
@@ -1210,7 +1246,7 @@ function resolveAbsoluteModelImport(importPath: string, baseDir: string, options
     debugLog(options, `Found matching model source: ${JSON.stringify(modelSource)}`);
 
     // Extract the model name from the import path
-    // e.g., 'soxhub-client/models/notification-message' -> 'notification-message'
+    // e.g., 'my-app/models/notification-message' -> 'notification-message'
     const modelName = importPath.replace(modelSource.pattern, '');
     debugLog(options, `Extracted model name: ${modelName}`);
 
@@ -1467,9 +1503,9 @@ export function createExtensionFromOriginalFile(
  * Calculate correct relative import path when moving a file to a different directory
  */
 function calculateRelativeImportPath(
-  sourceFilePath: string,      // Original model file location
-  targetFilePath: string,       // Extension file location
-  importedFilePath: string      // What the relative import points to
+  sourceFilePath: string, // Original model file location
+  targetFilePath: string, // Extension file location
+  importedFilePath: string // What the relative import points to
 ): string {
   const path = require('path');
   const sourceDir = path.dirname(sourceFilePath);
@@ -1588,11 +1624,7 @@ function updateRelativeImportsForExtensions(
       } else {
         // Dynamic calculation if we have both source and target paths
         if (targetFilePath && sourceFilePath) {
-          const newRelativePath = calculateRelativeImportPath(
-            sourceFilePath,
-            targetFilePath,
-            importPath
-          );
+          const newRelativePath = calculateRelativeImportPath(sourceFilePath, targetFilePath, importPath);
           const newImportSource = importSource.replace(importPath, newRelativePath);
           result = result.replace(importSource, newImportSource);
         } else {
