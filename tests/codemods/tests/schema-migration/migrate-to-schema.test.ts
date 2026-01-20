@@ -1,16 +1,66 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, relative } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { type MigrateOptions, runMigration } from '../../../../packages/codemods/src/schema-migration/migrate-to-schema.js';
+import {
+  type MigrateOptions,
+  runMigration,
+} from '../../../../packages/codemods/src/schema-migration/migrate-to-schema.js';
+
+function collectFilesSnapshot(baseDir: string, dir: string = baseDir): Record<string, string | null> {
+  const result: Record<string, string | null> = {};
+
+  try {
+    const entries = readdirSync(dir);
+    for (const entry of entries) {
+      const fullPath = join(dir, entry);
+      const relativePath = relative(baseDir, fullPath);
+      const stat = statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        result[relativePath + '/'] = "__dir__";
+        Object.assign(result, collectFilesSnapshot(baseDir, fullPath));
+      } else {
+        result[relativePath] = "\n" + readFileSync(fullPath, 'utf-8');
+      }
+    }
+  } catch {
+    // Directory doesn't exist
+  }
+
+  return result;
+}
+
+function collectFileStructure(baseDir: string, dir: string = baseDir): string[] {
+  const result: string[] = [];
+
+  try {
+    const entries = readdirSync(dir).sort();
+    for (const entry of entries) {
+      const fullPath = join(dir, entry);
+      const relativePath = relative(baseDir, fullPath);
+      const stat = statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        result.push(relativePath + '/');
+        result.push(...collectFileStructure(baseDir, fullPath));
+      } else {
+        result.push(relativePath);
+      }
+    }
+  } catch {
+    // Directory doesn't exist
+  }
+
+  return result;
+}
 
 describe('migrate-to-schema batch operation', () => {
   let tempDir: string;
   let options: MigrateOptions;
 
   beforeEach(() => {
-    // Create a temporary directory for each test
     tempDir = mkdtempSync(join(tmpdir(), 'migrate-to-schema-test-'));
 
     options = {
@@ -35,14 +85,10 @@ describe('migrate-to-schema batch operation', () => {
   });
 
   afterEach(() => {
-    // Clean up temporary directory
-    if (existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   it('generates schema and type artifacts for models', async () => {
-    // Create a simple model file
     const modelSource = `
 import Model, { attr, belongsTo } from '@ember-data/model';
 
@@ -58,29 +104,19 @@ export default class User extends Model {
 }
 `;
 
-    // Write model file
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'user.ts'), modelSource);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that schema file was generated
-    const schemaPath = join(tempDir, 'app/data/resources/user.schema.ts');
-    expect(existsSync(schemaPath)).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('generated file structure');
 
-    // Check that type file was generated
-    const typePath = join(tempDir, 'app/data/resources/user.schema.types.ts');
-    expect(existsSync(typePath)).toBe(true);
-
-    // Check that extension file was generated
-    const extensionPath = join(tempDir, 'app/data/extensions/user.ts');
-    expect(existsSync(extensionPath)).toBe(true);
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('generated files');
   });
 
   it('skips mixin processing when no model-connected mixins are found', async () => {
-    // Create a simple mixin file that is NOT connected to any models
     const mixinSource = `
 import Mixin from '@ember/object/mixin';
 
@@ -91,21 +127,17 @@ export default Mixin.create({
 });
 `;
 
-    // Write mixin file only (no model using it)
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(mixinsDir, { recursive: true });
     writeFileSync(join(mixinsDir, 'unused.ts'), mixinSource);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that no trait file was generated (since mixin is not connected to models)
-    const traitPath = join(tempDir, 'app/data/traits/unused.schema.ts');
-    expect(existsSync(traitPath)).toBe(false);
+    const traitsDir = join(tempDir, 'app/data/traits');
+    expect(collectFileStructure(traitsDir)).toMatchSnapshot('traits directory structure');
   });
 
   it('generates multiple artifacts when processing multiple files', async () => {
-    // Create multiple model files
     const user = `
 import Model, { attr } from '@ember-data/model';
 
@@ -128,29 +160,20 @@ export default class Company extends Model {
 }
 `;
 
-    // Write model files
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'user.ts'), user);
     writeFileSync(join(modelsDir, 'company.ts'), company);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that all schema files were generated
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/company.schema.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('generated file structure');
 
-    // Check that all type files were generated
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/company.schema.types.ts'))).toBe(true);
-
-    // Check that extension file was generated for company (it has a computed property)
-    expect(existsSync(join(tempDir, 'app/data/extensions/company.ts'))).toBe(true);
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('generated files');
   });
 
   it('respects dryRun option and does not create files', async () => {
-    // Create a model file
     const modelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -159,22 +182,18 @@ export default class User extends Model {
 }
 `;
 
-    // Write model file
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'user.ts'), modelSource);
 
-    // Run migration with dryRun
     const dryRunOptions: MigrateOptions = { ...options, dryRun: true };
     await runMigration(dryRunOptions);
 
-    // Check that no files were generated
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.ts'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.types.ts'))).toBe(false);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('dryRun file structure');
   });
 
   it('creates output directories if they do not exist', async () => {
-    // Create a model file
     const modelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -187,31 +206,22 @@ export default class User extends Model {
 }
 `;
 
-    // Write model file (but don't create output directories)
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'user.ts'), modelSource);
 
-    // Verify output directories don't exist yet
-    expect(existsSync(join(tempDir, 'app/data/resources'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/extensions'))).toBe(false);
+    const resourcesDirBefore = collectFileStructure(join(tempDir, 'app/data/resources'));
+    const extensionsDirBefore = collectFileStructure(join(tempDir, 'app/data/extensions'));
+    expect(resourcesDirBefore).toEqual([]);
+    expect(extensionsDirBefore).toEqual([]);
 
-    // Run migration
     await runMigration(options);
 
-    // Verify directories were created
-    expect(existsSync(join(tempDir, 'app/data/resources'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions'))).toBe(true);
-
-    // Verify files were created
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions/user.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('generated file structure');
   });
 
-
   it('respects models-only and mixins-only options', async () => {
-    // Create both model and mixin files
     const modelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -228,7 +238,6 @@ export default Mixin.create({
 });
 `;
 
-    // Write files
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -236,17 +245,14 @@ export default Mixin.create({
     writeFileSync(join(modelsDir, 'user.ts'), modelSource);
     writeFileSync(join(mixinsDir, 'common.ts'), mixinSource);
 
-    // Test models-only option
     const modelsOnlyOptions: MigrateOptions = { ...options, modelsOnly: true };
     await runMigration(modelsOnlyOptions);
 
-    // Check that only model artifacts were generated
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/common.schema.ts'))).toBe(false);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('models-only file structure');
   });
 
   it('ensures schema files match source extension and type files are always .ts', async () => {
-    // Create model files with different extensions
     const jsModelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -263,30 +269,18 @@ export default class TsModel extends Model {
 }
 `;
 
-    // Write model files with different extensions
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'js-model.js'), jsModelSource);
     writeFileSync(join(modelsDir, 'ts-model.ts'), tsModelSource);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that schema files match their source extensions
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model.schema.ts'))).toBe(true);
-
-    // Check that both type files are .ts regardless of source extension
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model.schema.types.ts'))).toBe(true);
-
-    // Ensure .js type files were NOT created
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model.schema.types.js'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model.schema.types.js'))).toBe(false);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('mixed extensions file structure');
   });
 
   it('colocates type files with their corresponding schemas and traits', async () => {
-    // Create nested directory structure
     const nestedModelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -313,33 +307,24 @@ export default class AdminModel extends Model.extend(ConnectedMixin) {
 }
 `;
 
-    // Create nested directory structures
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(join(modelsDir, 'admin'), { recursive: true });
     mkdirSync(join(mixinsDir, 'admin'), { recursive: true });
 
-    // Write files
     writeFileSync(join(modelsDir, 'admin/nested-model.ts'), nestedModelSource);
     writeFileSync(join(mixinsDir, 'admin/connected.ts'), connectedMixinSource);
     writeFileSync(join(modelsDir, 'admin/admin-model.ts'), modelUsingMixin);
 
-    // Run migration
-    await runMigration({...options, verbose: true});
+    await runMigration({ ...options, verbose: true });
 
-    // Check that schema and type files are colocated in resources
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.types.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('nested directory structure');
 
-    // Check that trait and trait-type files are colocated in traits
-    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.types.ts'))).toBe(true);
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('nested directory files');
   });
 
   it('does not put type files in the default fallback directory', async () => {
-    // Create a model file
     const modelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -348,24 +333,17 @@ export default class User extends Model {
 }
 `;
 
-    // Write model file
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'user.ts'), modelSource);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that type files are NOT in the default fallback directory (app/schemas)
-    expect(existsSync(join(tempDir, 'app/schemas'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/schemas/user.schema.types.ts'))).toBe(false);
-
-    // Verify they are in the correct location (colocated with schemas)
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.types.ts'))).toBe(true);
+    const appDir = join(tempDir, 'app');
+    expect(collectFileStructure(appDir)).toMatchSnapshot('app directory structure');
   });
 
   it('handles external mixin imports from additionalMixinSources', async () => {
-    // Create a model that imports external mixins
     const modelWithExternalMixin = `
 import Model, { attr } from '@ember-data/model';
 import ExternalMixin from '@external/mixins/external-mixin';
@@ -394,7 +372,6 @@ export default Mixin.create({
 });
 `;
 
-    // Write model and local mixin
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -403,37 +380,29 @@ export default Mixin.create({
     writeFileSync(join(modelsDir, 'test-model.ts'), modelWithExternalMixin);
     writeFileSync(join(mixinsDir, 'local-mixin.ts'), localMixin);
 
-    // Create external mixin directory and file
     const externalMixinsDir = join(tempDir, 'external/mixins');
     mkdirSync(externalMixinsDir, { recursive: true });
     writeFileSync(join(externalMixinsDir, 'external-mixin.ts'), externalMixin);
 
-    // Add additionalMixinSources configuration
     const optionsWithExternal: MigrateOptions = {
       ...options,
       additionalMixinSources: [
         {
           pattern: '@external/mixins/*',
-          dir: join(tempDir, 'external/mixins/*')
-        }
-      ]
+          dir: join(tempDir, 'external/mixins/*'),
+        },
+      ],
     };
 
-    // Run migration
     await runMigration(optionsWithExternal);
 
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('external mixins file structure');
 
-    // Check that schema and trait files were generated for both local and external mixins
-    expect(existsSync(join(tempDir, 'app/data/resources/test-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/test-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/local-mixin.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/local-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/external-mixin.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/external-mixin.schema.types.ts'))).toBe(true);
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('external mixins files');
   });
 
   it('handles mixed js and ts files correctly with proper type file extensions', async () => {
-    // Create mixed model and mixin files
     const jsModel = `
 import Model, { attr } from '@ember-data/model';
 import JsMixin from '../mixins/js-mixin';
@@ -478,7 +447,6 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
 }
 `;
 
-    // Write mixed files
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -489,31 +457,15 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
     writeFileSync(join(mixinsDir, 'js-mixin.js'), jsMixin);
     writeFileSync(join(mixinsDir, 'ts-mixin.ts'), tsMixin);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that schema files match their source extensions
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.schema.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('mixed js/ts file structure');
 
-    // Check that all type files are .ts regardless of source extension
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.schema.types.ts'))).toBe(true);
-
-    // Check that extension files match source extension (no .schema)
-    expect(existsSync(join(tempDir, 'app/data/extensions/js-model-with-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions/ts-mixin.ts'))).toBe(true); // Extension from TS mixin
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('mixed js/ts files');
   });
 
   it('processes intermediateModelPaths to generate traits from base model classes', async () => {
-    // This test ensures the data-field trait regression doesn't happen again
-    // The bug was that processIntermediateModelsToTraits wasn't being called
-
-    // Create a data field model (intermediate model)
     const dataFieldModel = `
 import BaseModel from './base-model';
 import BaseModelMixin from '@external/mixins/base-model-mixin';
@@ -529,7 +481,6 @@ export default class DataFieldModel extends BaseModel.extend(BaseModelMixin) {
 }
 `;
 
-    // Create a base model
     const baseModel = `
 import Model from '@ember-data/model';
 
@@ -537,7 +488,6 @@ export default class BaseModel extends Model {
 }
 `;
 
-    // Create a regular model that extends DataFieldModel
     const optionModel = `
 import DataFieldModel from '../core/data-field-model';
 
@@ -545,7 +495,6 @@ export default class CustomSelectOption extends DataFieldModel {
 }
 `;
 
-    // Create an external mixin
     const externalMixin = `
 import Mixin from '@ember/object/mixin';
 
@@ -554,7 +503,6 @@ export default Mixin.create({
 });
 `;
 
-    // Setup directories
     const coreDir = join(tempDir, 'app/core');
     const modelsDir = join(tempDir, 'app/models');
     const externalMixinsDir = join(tempDir, 'external/mixins');
@@ -562,80 +510,49 @@ export default Mixin.create({
     mkdirSync(modelsDir, { recursive: true });
     mkdirSync(externalMixinsDir, { recursive: true });
 
-    // Write files
     writeFileSync(join(coreDir, 'data-field-model.ts'), dataFieldModel);
     writeFileSync(join(coreDir, 'base-model.ts'), baseModel);
     writeFileSync(join(modelsDir, 'custom-select-option.js'), optionModel);
     writeFileSync(join(externalMixinsDir, 'base-model-mixin.js'), externalMixin);
 
-    // Configure options with intermediate model paths and their mappings
     const testOptions: MigrateOptions = {
       ...options,
-      intermediateModelPaths: [
-        'soxhub-client/core/base-model',
-        'soxhub-client/core/data-field-model'
-      ],
+      intermediateModelPaths: ['soxhub-client/core/base-model', 'soxhub-client/core/data-field-model'],
       additionalModelSources: [
         {
           pattern: 'soxhub-client/core/*',
-          dir: join(tempDir, 'app/core/*')
-        }
+          dir: join(tempDir, 'app/core/*'),
+        },
       ],
       additionalMixinSources: [
         {
           pattern: '@external/mixins/*',
-          dir: join(tempDir, 'external/mixins/*')
-        }
-      ]
+          dir: join(tempDir, 'external/mixins/*'),
+        },
+      ],
     };
 
-    // Change to temp directory for the migration (as it would be in real usage)
     const originalCwd = process.cwd();
     process.chdir(tempDir);
 
     try {
-      // Run migration
       await runMigration(testOptions);
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);
     }
 
-    // Verify that intermediate model traits were generated
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('intermediate models file structure');
+
     const traitsDir = join(tempDir, 'app/data/traits');
-    expect(existsSync(traitsDir)).toBe(true);
-    expect(existsSync(join(traitsDir, 'data-field.schema.ts'))).toBe(true);
-    expect(existsSync(join(traitsDir, 'data-field.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(traitsDir, 'base.schema.ts'))).toBe(true);
-    expect(existsSync(join(traitsDir, 'base.schema.types.ts'))).toBe(true);
+    expect(collectFilesSnapshot(traitsDir)).toMatchSnapshot('intermediate models traits');
 
-    // Verify regular model was processed (JS file, so schema should be .schema.js)
-    expect(existsSync(join(tempDir, 'app/data/resources/custom-select-option.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/custom-select-option.schema.types.ts'))).toBe(true);
-
-    // Verify that the data-field trait contains the expected fields
-    const dataFieldTrait = readFileSync(join(traitsDir, 'data-field.schema.ts'), 'utf-8');
-    expect(dataFieldTrait).toContain('name'); // Should have name field
-    expect(dataFieldTrait).toContain('sortOrder'); // Should have sortOrder field
-
-    // The regular model extending DataFieldModel should reference the data-field trait
-    // This is the main regression test - if intermediate models aren't processed,
-    // this model won't get the data-field functionality
-    const generatedSchema = readFileSync(join(tempDir, 'app/data/resources/custom-select-option.schema.js'), 'utf-8');
-
-    // Since CustomSelectOption extends DataFieldModel and DataFieldModel was processed as an intermediate model,
-    // the trait functionality should be available. The exact way traits are referenced may vary,
-    // but the important thing is that the intermediate model processing worked.
-
-    // Basic check that the model was processed successfully
-    expect(generatedSchema.length).toBeGreaterThan(0);
-    expect(generatedSchema).toContain('custom-select-option'); // Should contain model identifier
+    const resourcesDir = join(tempDir, 'app/data/resources');
+    expect(collectFilesSnapshot(resourcesDir)).toMatchSnapshot('intermediate models resources');
   });
 
   it('places intermediate model extensions in extensionsDir not fallback directory', async () => {
-    // This test ensures intermediate model extensions go to extensionsDir, not app/schemas/
-
-    // Create an intermediate model with both fields (trait) and methods (extension)
     const intermediateModelWithMethods = `
 import Model, { attr } from '@ember-data/model';
 
@@ -653,7 +570,6 @@ export default class BaseModelWithMethods extends Model {
 }
 `;
 
-    // Create a regular model that extends the intermediate model
     const regularModel = `
 import BaseModelWithMethods from '../core/base-model-with-methods';
 
@@ -661,66 +577,43 @@ export default class RegularModel extends BaseModelWithMethods {
 }
 `;
 
-    // Setup directories
     const coreDir = join(tempDir, 'app/core');
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(coreDir, { recursive: true });
     mkdirSync(modelsDir, { recursive: true });
 
-    // Write files
     writeFileSync(join(coreDir, 'base-model-with-methods.js'), intermediateModelWithMethods);
     writeFileSync(join(modelsDir, 'regular-model.ts'), regularModel);
 
-    // Configure options with intermediate model paths
     const testOptions: MigrateOptions = {
       ...options,
-      intermediateModelPaths: [
-        'soxhub-client/core/base-model-with-methods'
-      ],
+      intermediateModelPaths: ['soxhub-client/core/base-model-with-methods'],
       additionalModelSources: [
         {
           pattern: 'soxhub-client/core/*',
-          dir: join(tempDir, 'app/core/*')
-        }
-      ]
+          dir: join(tempDir, 'app/core/*'),
+        },
+      ],
     };
 
-    // Change to temp directory for the migration
     const originalCwd = process.cwd();
     process.chdir(tempDir);
 
     try {
-      // Run migration
       await runMigration(testOptions);
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);
     }
 
-    // Verify that intermediate model extension goes to extensionsDir, NOT fallback
-    const extensionPath = join(tempDir, 'app/data/extensions/base-model-with-methods.js');
-    const fallbackPath = join(tempDir, 'app/schemas/base-model-with-methods.js');
+    const appDir = join(tempDir, 'app');
+    expect(collectFileStructure(appDir)).toMatchSnapshot('intermediate model extensions app structure');
 
-    expect(existsSync(extensionPath)).toBe(true);
-    expect(existsSync(fallbackPath)).toBe(false);
-
-    // Also verify that trait was generated correctly
-    expect(existsSync(join(tempDir, 'app/data/traits/base-model-with-methods.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/base-model-with-methods.schema.types.ts'))).toBe(true);
-
-    // Verify that the fallback directory (app/schemas) doesn't exist at all
-    expect(existsSync(join(tempDir, 'app/schemas'))).toBe(false);
-
-    // Check that regular model was processed normally
-    expect(existsSync(join(tempDir, 'app/data/resources/regular-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/regular-model.schema.types.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('intermediate model extensions files');
   });
 
   it('ensures resources and traits include .schema with matching suffixes', async () => {
-    // This test specifically verifies the new naming requirement:
-    // resources and traits should include .schema in their filename
-    // and their suffix should match that of their original source file
-
     const jsModel = `
 import Model, { attr } from '@ember-data/model';
 import TestMixin from '../mixins/test-mixin';
@@ -755,7 +648,6 @@ export default class TsTestModel extends Model {
 }
 `;
 
-    // Write files with different extensions
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -765,40 +657,13 @@ export default class TsTestModel extends Model {
     writeFileSync(join(modelsDir, 'ts-test-model.ts'), tsModel);
     writeFileSync(join(mixinsDir, 'test-mixin.ts'), tsMixin);
 
-    // Run migration
     await runMigration(options);
 
-    // Verify resource schema files include .schema and match source extensions
-    expect(existsSync(join(tempDir, 'app/data/resources/js-test-model.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-test-model.schema.ts'))).toBe(true);
-
-    // Verify trait schema files include .schema and match source extensions
-    expect(existsSync(join(tempDir, 'app/data/traits/test-mixin.schema.ts'))).toBe(true);
-
-    // Verify extension files match source extensions (no .schema)
-    expect(existsSync(join(tempDir, 'app/data/extensions/js-test-model.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions/test-mixin.ts'))).toBe(true);
-
-    // Verify type files always end in .ts (regardless of source extension)
-    expect(existsSync(join(tempDir, 'app/data/resources/js-test-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-test-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/test-mixin.schema.types.ts'))).toBe(true);
-
-    // Verify old naming patterns do NOT exist for schemas and traits
-    expect(existsSync(join(tempDir, 'app/data/resources/js-test-model.js'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-test-model.js'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/traits/test-mixin.js'))).toBe(false);
-
-    // Verify .schema extensions do NOT exist for extension files
-    expect(existsSync(join(tempDir, 'app/data/extensions/js-test-model.schema.js'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/extensions/test-mixin.schema.ts'))).toBe(false);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('schema naming file structure');
   });
 
   it('dynamically detects traits vs resources for import paths', async () => {
-    // This test verifies that the codemod dynamically determines whether
-    // a related type should be imported from traits or resources based on
-    // whether a trait file exists for that type
-
     const modelWithBothTypes = `
 import Model, { belongsTo } from '@ember-data/model';
 import WorkstreamableMixin from '../mixins/workstreamable';
@@ -829,7 +694,6 @@ export default Mixin.create({
 });
 `;
 
-    // Create directories and files
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -839,72 +703,15 @@ export default Mixin.create({
     writeFileSync(join(modelsDir, 'user.ts'), userModel);
     writeFileSync(join(mixinsDir, 'workstreamable.ts'), workstreamableMixin);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that the type file was generated for the test model
-    const typeFilePath = join(tempDir, 'app/data/resources/test-model.schema.types.ts');
-    expect(existsSync(typeFilePath)).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('traits vs resources file structure');
 
-    // Check that both trait and resource files were generated
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/workstreamable.schema.ts'))).toBe(true);
-
-    // Read the type file and verify the import paths
-    const typeFileContent = readFileSync(typeFilePath, 'utf-8');
-
-    // User should be imported from resources
-    expect(typeFileContent).toContain('test-app/data/resources/user.schema.types');
-
-    // Workstreamable should be imported from traits with Trait suffix but aliased back
-    expect(typeFileContent).toContain('test-app/data/traits/workstreamable.schema.types');
-    expect(typeFileContent).toContain('WorkstreamableTrait as Workstreamable');
-
-    // Verify the wrong paths don't exist
-    expect(typeFileContent).not.toContain('test-app/data/resources/workstreamable.schema.types');
-    expect(typeFileContent).not.toContain('test-app/data/traits/user.schema.types');
-  });
-
-  describe('generateExternalResources option', () => {
-    it('should be configurable and default to undefined/false', () => {
-      // Test that the option can be set via configuration
-      const configWithOptionEnabled = {
-        ...options,
-        generateExternalResources: true
-      };
-      expect(configWithOptionEnabled.generateExternalResources).toBe(true);
-
-      const configWithOptionDisabled = {
-        ...options,
-        generateExternalResources: false
-      };
-      expect(configWithOptionDisabled.generateExternalResources).toBe(false);
-
-      // Test default behavior (option not set)
-      expect(options.generateExternalResources).toBeUndefined();
-    });
-
-    it('should be properly typed in the configuration interface', () => {
-      // This test ensures the TypeScript interface includes the new option
-      // If this compiles, the option is properly typed
-      const configWithOption: typeof options = {
-        ...options,
-        generateExternalResources: true
-      };
-
-      // Test the option can be set to boolean values
-      expect(typeof configWithOption.generateExternalResources).toBe('boolean');
-
-      // Test the option can be undefined (not required)
-      const configWithoutOption: typeof options = {
-        ...options
-      };
-      expect(configWithoutOption.generateExternalResources).toBeUndefined();
-    });
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('traits vs resources files');
   });
 
   it('ensures type files are always .ts regardless of source file extension', async () => {
-    // Create model files with different extensions
     const jsModelSource = `
 import Model, { attr } from '@ember-data/model';
 
@@ -921,182 +728,18 @@ export default class TsModel extends Model {
 }
 `;
 
-    // Write model files with different extensions
     const modelsDir = join(tempDir, 'app/models');
     mkdirSync(modelsDir, { recursive: true });
     writeFileSync(join(modelsDir, 'js-model.js'), jsModelSource);
     writeFileSync(join(modelsDir, 'ts-model.ts'), tsModelSource);
 
-    // Run migration
     await runMigration(options);
 
-    // Check that both type files are .ts regardless of source extension
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model.schema.types.ts'))).toBe(true);
-
-    // Ensure .js type files were NOT created
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model.schema.types.js'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model.schema.types.js'))).toBe(false);
-  });
-
-  it('colocates type files with their corresponding schemas and traits', async () => {
-    // Create nested directory structure
-    const nestedModelSource = `
-import Model, { attr } from '@ember-data/model';
-
-export default class NestedModel extends Model {
-  @attr('string') name;
-}
-`;
-
-    const connectedMixinSource = `
-import Mixin from '@ember/object/mixin';
-import { attr } from '@ember-data/model';
-
-export default Mixin.create({
-  commonField: attr('string')
-});
-`;
-
-    const modelUsingMixin = `
-import Model, { attr } from '@ember-data/model';
-import ConnectedMixin from '../../mixins/admin/connected';
-
-export default class AdminModel extends Model.extend(ConnectedMixin) {
-  @attr('string') adminName;
-}
-`;
-
-    // Create nested directory structures
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(join(modelsDir, 'admin'), { recursive: true });
-    mkdirSync(join(mixinsDir, 'admin'), { recursive: true });
-
-    // Write files
-    writeFileSync(join(modelsDir, 'admin/nested-model.ts'), nestedModelSource);
-    writeFileSync(join(mixinsDir, 'admin/connected.ts'), connectedMixinSource);
-    writeFileSync(join(modelsDir, 'admin/admin-model.ts'), modelUsingMixin);
-
-    // Run migration
-    await runMigration({...options, verbose: true});
-
-    // Check that schema and type files are colocated in resources
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/nested-model.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/admin/admin-model.schema.types.ts'))).toBe(true);
-
-    // Check that trait and trait-type files are colocated in traits
-    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/admin/connected.schema.types.ts'))).toBe(true);
-  });
-
-  it('does not put type files in the default fallback directory', async () => {
-    // Create a model file
-    const modelSource = `
-import Model, { attr } from '@ember-data/model';
-
-export default class User extends Model {
-  @attr('string') name;
-}
-`;
-
-    // Write model file
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
-
-    // Run migration
-    await runMigration(options);
-
-    // Check that type files are NOT in the default fallback directory (app/schemas)
-    expect(existsSync(join(tempDir, 'app/schemas'))).toBe(false);
-    expect(existsSync(join(tempDir, 'app/schemas/user.schema.types.ts'))).toBe(false);
-
-    // Verify they are in the correct location (colocated with schemas)
-    expect(existsSync(join(tempDir, 'app/data/resources/user.schema.types.ts'))).toBe(true);
-  });
-
-  it('handles mixed js and ts files correctly with proper type file extensions', async () => {
-    // Create mixed model and mixin files
-    const jsModel = `
-import Model, { attr } from '@ember-data/model';
-import JsMixin from '../mixins/js-mixin';
-
-export default class JsModelWithMixin extends Model.extend(JsMixin) {
-  @attr('string') name;
-
-  get displayName() {
-    return this.name + ' (JS)';
-  }
-}
-`;
-
-    const tsMixin = `
-import Mixin from '@ember/object/mixin';
-import { attr } from '@ember-data/model';
-
-export default Mixin.create({
-  isEnabled: attr('boolean'),
-
-  toggleEnabled() {
-    this.set('isEnabled', !this.isEnabled);
-  }
-});
-`;
-
-    const jsMixin = `
-import Mixin from '@ember/object/mixin';
-import { attr } from '@ember-data/model';
-
-export default Mixin.create({
-  createdAt: attr('date')
-});
-`;
-
-    const tsModel = `
-import Model, { attr } from '@ember-data/model';
-import TsMixin from '../mixins/ts-mixin';
-
-export default class TsModelWithMixin extends Model.extend(TsMixin) {
-  @attr('string') title;
-}
-`;
-
-    // Write mixed files
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(modelsDir, 'js-model-with-mixin.js'), jsModel);
-    writeFileSync(join(modelsDir, 'ts-model-with-mixin.ts'), tsModel);
-    writeFileSync(join(mixinsDir, 'js-mixin.js'), jsMixin);
-    writeFileSync(join(mixinsDir, 'ts-mixin.ts'), tsMixin);
-
-    // Run migration
-    await runMigration(options);
-
-    // Check that schema files preserve source extension (.js or .ts)
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.schema.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.schema.ts'))).toBe(true);
-
-    // Check that all type files are .ts regardless of source extension
-    expect(existsSync(join(tempDir, 'app/data/resources/js-model-with-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/ts-model-with-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/js-mixin.schema.types.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/traits/ts-mixin.schema.types.ts'))).toBe(true);
-
-    // Check that extension files preserve source extension
-    expect(existsSync(join(tempDir, 'app/data/extensions/js-model-with-mixin.js'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/extensions/ts-mixin.ts'))).toBe(true);
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('type files extension structure');
   });
 
   it('detects mixins referenced via type-only imports', async () => {
-    // Create a mixin file
     const mixinSource = `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
@@ -1130,7 +773,6 @@ export default class AuditLog extends Model.extend(AuditableMixin) {
 }
 `;
 
-    // Write files
     const modelsDir = join(tempDir, 'app/models');
     const mixinsDir = join(tempDir, 'app/mixins');
     mkdirSync(modelsDir, { recursive: true });
@@ -1140,24 +782,12 @@ export default class AuditLog extends Model.extend(AuditableMixin) {
     writeFileSync(join(modelsDir, 'audited-record.ts'), modelWithTypeImport);
     writeFileSync(join(modelsDir, 'audit-log.ts'), modelWithDirectUse);
 
-    // Run migration
     await runMigration(options);
 
-    // The mixin should be detected as connected (via type-only import OR direct use)
-    // and trait files should be generated
-    const traitSchemaPath = join(tempDir, 'app/data/traits/auditable.schema.ts');
-    const traitTypePath = join(tempDir, 'app/data/traits/auditable.schema.types.ts');
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('type-only import file structure');
 
-    expect(existsSync(traitSchemaPath)).toBe(true);
-    expect(existsSync(traitTypePath)).toBe(true);
-
-    // Verify the trait contains the expected fields
-    const traitSchema = readFileSync(traitSchemaPath, 'utf-8');
-    expect(traitSchema).toContain('auditStatus');
-    expect(traitSchema).toContain('auditDate');
-
-    // Verify both models were processed
-    expect(existsSync(join(tempDir, 'app/data/resources/audited-record.schema.ts'))).toBe(true);
-    expect(existsSync(join(tempDir, 'app/data/resources/audit-log.schema.ts'))).toBe(true);
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('type-only import files');
   });
 });
+
