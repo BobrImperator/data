@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -19,10 +28,10 @@ function collectFilesSnapshot(baseDir: string, dir: string = baseDir): Record<st
       const stat = statSync(fullPath);
 
       if (stat.isDirectory()) {
-        result[relativePath + '/'] = "__dir__";
+        result[relativePath + '/'] = '__dir__';
         Object.assign(result, collectFilesSnapshot(baseDir, fullPath));
       } else {
-        result[relativePath] = "\n" + readFileSync(fullPath, 'utf-8');
+        result[relativePath] = '\n' + readFileSync(fullPath, 'utf-8');
       }
     }
   } catch {
@@ -88,8 +97,24 @@ describe('migrate-to-schema batch operation', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  function prepareFiles(baseDir: string, files: Record<string, string>) {
+    for (const [key, content] of Object.entries(files)) {
+      const withoutFile = key.split('/');
+      withoutFile.pop();
+      const path = join(...withoutFile);
+      const fullPath = join(baseDir, path);
+
+      if (!existsSync(fullPath)) {
+        mkdirSync(fullPath, { recursive: true });
+      }
+
+      writeFileSync(join(baseDir, key), content);
+    }
+  }
+
   it('generates schema and type artifacts for models', async () => {
-    const modelSource = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr, belongsTo } from '@ember-data/model';
 
 export default class User extends Model {
@@ -102,22 +127,19 @@ export default class User extends Model {
     return this.name || this.email;
   }
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
+`,
+    });
 
     await runMigration(options);
 
     const dataDir = join(tempDir, 'app/data');
     expect(collectFileStructure(dataDir)).toMatchSnapshot('generated file structure');
-
     expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('generated files');
   });
 
   it('skips mixin processing when no model-connected mixins are found', async () => {
-    const mixinSource = `
+    prepareFiles(tempDir, {
+      'app/mixins/unused.ts': `
 import Mixin from '@ember/object/mixin';
 
 export default Mixin.create({
@@ -125,11 +147,8 @@ export default Mixin.create({
     return 'common behavior';
   }
 });
-`;
-
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(mixinsDir, { recursive: true });
-    writeFileSync(join(mixinsDir, 'unused.ts'), mixinSource);
+`,
+    });
 
     await runMigration(options);
 
@@ -138,16 +157,16 @@ export default Mixin.create({
   });
 
   it('generates multiple artifacts when processing multiple files', async () => {
-    const user = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
   @attr('string') name;
   @attr('string') email;
 }
-`;
-
-    const company = `
+`,
+      'app/models/company.ts': `
 import Model, { attr, hasMany } from '@ember-data/model';
 
 export default class Company extends Model {
@@ -158,12 +177,8 @@ export default class Company extends Model {
     return this.users.length;
   }
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), user);
-    writeFileSync(join(modelsDir, 'company.ts'), company);
+`,
+    });
 
     await runMigration(options);
 
@@ -174,17 +189,15 @@ export default class Company extends Model {
   });
 
   it('respects dryRun option and does not create files', async () => {
-    const modelSource = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
   @attr('string') name;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
+`,
+    });
 
     const dryRunOptions: MigrateOptions = { ...options, dryRun: true };
     await runMigration(dryRunOptions);
@@ -194,7 +207,8 @@ export default class User extends Model {
   });
 
   it('creates output directories if they do not exist', async () => {
-    const modelSource = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
@@ -204,11 +218,8 @@ export default class User extends Model {
     return this.name;
   }
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
+`,
+    });
 
     const resourcesDirBefore = collectFileStructure(join(tempDir, 'app/data/resources'));
     const extensionsDirBefore = collectFileStructure(join(tempDir, 'app/data/extensions'));
@@ -222,28 +233,22 @@ export default class User extends Model {
   });
 
   it('respects models-only and mixins-only options', async () => {
-    const modelSource = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
   @attr('string') name;
 }
-`;
-
-    const mixinSource = `
+`,
+      'app/mixins/common.ts': `
 import Mixin from '@ember/object/mixin';
 
 export default Mixin.create({
   commonMethod() {}
 });
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
-    writeFileSync(join(mixinsDir, 'common.ts'), mixinSource);
+`,
+    });
 
     const modelsOnlyOptions: MigrateOptions = { ...options, modelsOnly: true };
     await runMigration(modelsOnlyOptions);
@@ -253,26 +258,22 @@ export default Mixin.create({
   });
 
   it('ensures schema files match source extension and type files are always .ts', async () => {
-    const jsModelSource = `
+    prepareFiles(tempDir, {
+      'app/models/js-model.js': `
 import Model, { attr } from '@ember-data/model';
 
 export default class JsModel extends Model {
   @attr('string') name;
 }
-`;
-
-    const tsModelSource = `
+`,
+      'app/models/ts-model.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class TsModel extends Model {
   @attr('string') name;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'js-model.js'), jsModelSource);
-    writeFileSync(join(modelsDir, 'ts-model.ts'), tsModelSource);
+`,
+    });
 
     await runMigration(options);
 
@@ -281,40 +282,31 @@ export default class TsModel extends Model {
   });
 
   it('colocates type files with their corresponding schemas and traits', async () => {
-    const nestedModelSource = `
+    prepareFiles(tempDir, {
+      'app/models/admin/nested-model.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class NestedModel extends Model {
   @attr('string') name;
 }
-`;
-
-    const connectedMixinSource = `
+`,
+      'app/mixins/admin/connected.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
 export default Mixin.create({
   commonField: attr('string')
 });
-`;
-
-    const modelUsingMixin = `
+`,
+      'app/models/admin/admin-model.ts': `
 import Model, { attr } from '@ember-data/model';
 import ConnectedMixin from '../../mixins/admin/connected';
 
 export default class AdminModel extends Model.extend(ConnectedMixin) {
   @attr('string') adminName;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(join(modelsDir, 'admin'), { recursive: true });
-    mkdirSync(join(mixinsDir, 'admin'), { recursive: true });
-
-    writeFileSync(join(modelsDir, 'admin/nested-model.ts'), nestedModelSource);
-    writeFileSync(join(mixinsDir, 'admin/connected.ts'), connectedMixinSource);
-    writeFileSync(join(modelsDir, 'admin/admin-model.ts'), modelUsingMixin);
+`,
+    });
 
     await runMigration({ ...options, verbose: true });
 
@@ -325,17 +317,15 @@ export default class AdminModel extends Model.extend(ConnectedMixin) {
   });
 
   it('does not put type files in the default fallback directory', async () => {
-    const modelSource = `
+    prepareFiles(tempDir, {
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
   @attr('string') name;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'user.ts'), modelSource);
+`,
+    });
 
     await runMigration(options);
 
@@ -344,7 +334,8 @@ export default class User extends Model {
   });
 
   it('handles external mixin imports from additionalMixinSources', async () => {
-    const modelWithExternalMixin = `
+    prepareFiles(tempDir, {
+      'app/models/test-model.ts': `
 import Model, { attr } from '@ember-data/model';
 import ExternalMixin from '@external/mixins/external-mixin';
 import LocalMixin from '../mixins/local-mixin';
@@ -352,37 +343,24 @@ import LocalMixin from '../mixins/local-mixin';
 export default class TestModel extends Model.extend(ExternalMixin, LocalMixin) {
   @attr('string') name;
 }
-`;
-
-    const localMixin = `
+`,
+      'app/mixins/local-mixin.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
 export default Mixin.create({
   localField: attr('string')
 });
-`;
-
-    const externalMixin = `
+`,
+      'external/mixins/external-mixin.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
 export default Mixin.create({
   externalField: attr('string')
 });
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(modelsDir, 'test-model.ts'), modelWithExternalMixin);
-    writeFileSync(join(mixinsDir, 'local-mixin.ts'), localMixin);
-
-    const externalMixinsDir = join(tempDir, 'external/mixins');
-    mkdirSync(externalMixinsDir, { recursive: true });
-    writeFileSync(join(externalMixinsDir, 'external-mixin.ts'), externalMixin);
+`,
+    });
 
     const optionsWithExternal: MigrateOptions = {
       ...options,
@@ -403,7 +381,8 @@ export default Mixin.create({
   });
 
   it('handles mixed js and ts files correctly with proper type file extensions', async () => {
-    const jsModel = `
+    prepareFiles(tempDir, {
+      'app/models/js-model-with-mixin.js': `
 import Model, { attr } from '@ember-data/model';
 import JsMixin from '../mixins/js-mixin';
 
@@ -414,9 +393,24 @@ export default class JsModelWithMixin extends Model.extend(JsMixin) {
     return this.name + ' (JS)';
   }
 }
-`;
+`,
+      'app/models/ts-model-with-mixin.ts': `
+import Model, { attr } from '@ember-data/model';
+import TsMixin from '../mixins/ts-mixin';
 
-    const tsMixin = `
+export default class TsModelWithMixin extends Model.extend(TsMixin) {
+  @attr('string') title;
+}
+`,
+      'app/mixins/js-mixin.js': `
+import Mixin from '@ember/object/mixin';
+import { attr } from '@ember-data/model';
+
+export default Mixin.create({
+  createdAt: attr('date')
+});
+`,
+      'app/mixins/ts-mixin.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
@@ -427,35 +421,8 @@ export default Mixin.create({
     this.set('isEnabled', !this.isEnabled);
   }
 });
-`;
-
-    const jsMixin = `
-import Mixin from '@ember/object/mixin';
-import { attr } from '@ember-data/model';
-
-export default Mixin.create({
-  createdAt: attr('date')
-});
-`;
-
-    const tsModel = `
-import Model, { attr } from '@ember-data/model';
-import TsMixin from '../mixins/ts-mixin';
-
-export default class TsModelWithMixin extends Model.extend(TsMixin) {
-  @attr('string') title;
-}
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(modelsDir, 'js-model-with-mixin.js'), jsModel);
-    writeFileSync(join(modelsDir, 'ts-model-with-mixin.ts'), tsModel);
-    writeFileSync(join(mixinsDir, 'js-mixin.js'), jsMixin);
-    writeFileSync(join(mixinsDir, 'ts-mixin.ts'), tsMixin);
+`,
+    });
 
     await runMigration(options);
 
@@ -466,7 +433,8 @@ export default class TsModelWithMixin extends Model.extend(TsMixin) {
   });
 
   it('processes intermediateModelPaths to generate traits from base model classes', async () => {
-    const dataFieldModel = `
+    prepareFiles(tempDir, {
+      'app/core/data-field-model.ts': `
 import BaseModel from './base-model';
 import BaseModelMixin from '@external/mixins/base-model-mixin';
 import { attr } from '@ember-data/model';
@@ -479,41 +447,27 @@ export default class DataFieldModel extends BaseModel.extend(BaseModelMixin) {
   @attr('string') name;
   @attr('number') sortOrder;
 }
-`;
-
-    const baseModel = `
+`,
+      'app/core/base-model.ts': `
 import Model from '@ember-data/model';
 
 export default class BaseModel extends Model {
 }
-`;
-
-    const optionModel = `
+`,
+      'app/models/custom-select-option.js': `
 import DataFieldModel from '../core/data-field-model';
 
 export default class CustomSelectOption extends DataFieldModel {
 }
-`;
-
-    const externalMixin = `
+`,
+      'external/mixins/base-model-mixin.js': `
 import Mixin from '@ember/object/mixin';
 
 export default Mixin.create({
   // Base model functionality
 });
-`;
-
-    const coreDir = join(tempDir, 'app/core');
-    const modelsDir = join(tempDir, 'app/models');
-    const externalMixinsDir = join(tempDir, 'external/mixins');
-    mkdirSync(coreDir, { recursive: true });
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(externalMixinsDir, { recursive: true });
-
-    writeFileSync(join(coreDir, 'data-field-model.ts'), dataFieldModel);
-    writeFileSync(join(coreDir, 'base-model.ts'), baseModel);
-    writeFileSync(join(modelsDir, 'custom-select-option.js'), optionModel);
-    writeFileSync(join(externalMixinsDir, 'base-model-mixin.js'), externalMixin);
+`,
+    });
 
     const testOptions: MigrateOptions = {
       ...options,
@@ -553,7 +507,8 @@ export default Mixin.create({
   });
 
   it('places intermediate model extensions in extensionsDir not fallback directory', async () => {
-    const intermediateModelWithMethods = `
+    prepareFiles(tempDir, {
+      'app/core/base-model-with-methods.js': `
 import Model, { attr } from '@ember-data/model';
 
 export default class BaseModelWithMethods extends Model {
@@ -568,22 +523,14 @@ export default class BaseModelWithMethods extends Model {
     return 'from base model';
   }
 }
-`;
-
-    const regularModel = `
+`,
+      'app/models/regular-model.ts': `
 import BaseModelWithMethods from '../core/base-model-with-methods';
 
 export default class RegularModel extends BaseModelWithMethods {
 }
-`;
-
-    const coreDir = join(tempDir, 'app/core');
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(coreDir, { recursive: true });
-    mkdirSync(modelsDir, { recursive: true });
-
-    writeFileSync(join(coreDir, 'base-model-with-methods.js'), intermediateModelWithMethods);
-    writeFileSync(join(modelsDir, 'regular-model.ts'), regularModel);
+`,
+    });
 
     const testOptions: MigrateOptions = {
       ...options,
@@ -614,7 +561,8 @@ export default class RegularModel extends BaseModelWithMethods {
   });
 
   it('ensures resources and traits include .schema with matching suffixes', async () => {
-    const jsModel = `
+    prepareFiles(tempDir, {
+      'app/models/js-test-model.js': `
 import Model, { attr } from '@ember-data/model';
 import TestMixin from '../mixins/test-mixin';
 
@@ -625,9 +573,15 @@ export default class JsTestModel extends Model.extend(TestMixin) {
     return 'JS: ' + this.name;
   }
 }
-`;
+`,
+      'app/models/ts-test-model.ts': `
+import Model, { attr } from '@ember-data/model';
 
-    const tsMixin = `
+export default class TsTestModel extends Model {
+  @attr('string') title;
+}
+`,
+      'app/mixins/test-mixin.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
@@ -638,24 +592,8 @@ export default Mixin.create({
     return 'test';
   }
 });
-`;
-
-    const tsModel = `
-import Model, { attr } from '@ember-data/model';
-
-export default class TsTestModel extends Model {
-  @attr('string') title;
-}
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(modelsDir, 'js-test-model.js'), jsModel);
-    writeFileSync(join(modelsDir, 'ts-test-model.ts'), tsModel);
-    writeFileSync(join(mixinsDir, 'test-mixin.ts'), tsMixin);
+`,
+    });
 
     await runMigration(options);
 
@@ -664,7 +602,8 @@ export default class TsTestModel extends Model {
   });
 
   it('dynamically detects traits vs resources for import paths', async () => {
-    const modelWithBothTypes = `
+    prepareFiles(tempDir, {
+      'app/models/test-model.ts': `
 import Model, { belongsTo } from '@ember-data/model';
 import WorkstreamableMixin from '../mixins/workstreamable';
 
@@ -675,33 +614,23 @@ export default class TestModel extends Model.extend(WorkstreamableMixin) {
   // This should be imported from traits (exists as trait)
   @belongsTo('workstreamable', { async: false }) workstreamable;
 }
-`;
-
-    const userModel = `
+`,
+      'app/models/user.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class User extends Model {
   @attr('string') name;
 }
-`;
-
-    const workstreamableMixin = `
+`,
+      'app/mixins/workstreamable.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
 export default Mixin.create({
   workstreamType: attr('string')
 });
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(modelsDir, 'test-model.ts'), modelWithBothTypes);
-    writeFileSync(join(modelsDir, 'user.ts'), userModel);
-    writeFileSync(join(mixinsDir, 'workstreamable.ts'), workstreamableMixin);
+`,
+    });
 
     await runMigration(options);
 
@@ -712,26 +641,22 @@ export default Mixin.create({
   });
 
   it('ensures type files are always .ts regardless of source file extension', async () => {
-    const jsModelSource = `
+    prepareFiles(tempDir, {
+      'app/models/js-model.js': `
 import Model, { attr } from '@ember-data/model';
 
 export default class JsModel extends Model {
   @attr('string') name;
 }
-`;
-
-    const tsModelSource = `
+`,
+      'app/models/ts-model.ts': `
 import Model, { attr } from '@ember-data/model';
 
 export default class TsModel extends Model {
   @attr('string') name;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    mkdirSync(modelsDir, { recursive: true });
-    writeFileSync(join(modelsDir, 'js-model.js'), jsModelSource);
-    writeFileSync(join(modelsDir, 'ts-model.ts'), tsModelSource);
+`,
+    });
 
     await runMigration(options);
 
@@ -740,7 +665,8 @@ export default class TsModel extends Model {
   });
 
   it('detects mixins referenced via type-only imports', async () => {
-    const mixinSource = `
+    prepareFiles(tempDir, {
+      'app/mixins/auditable.ts': `
 import Mixin from '@ember/object/mixin';
 import { attr } from '@ember-data/model';
 
@@ -748,12 +674,8 @@ export default Mixin.create({
   auditStatus: attr('string'),
   auditDate: attr('date')
 });
-`;
-
-    // Create a model that uses the mixin via type-only import
-    // This pattern is used when models have runtime mixin usage elsewhere
-    // but need the type for declarations
-    const modelWithTypeImport = `
+`,
+      'app/models/audited-record.ts': `
 import Model, { attr, belongsTo } from '@ember-data/model';
 import type AuditableMixin from '../mixins/auditable';
 
@@ -761,26 +683,16 @@ export default class AuditedRecord extends Model {
   @attr('string') name;
   @belongsTo('user', { async: false }) user;
 }
-`;
-
-    // Create a model that uses the mixin directly (for comparison)
-    const modelWithDirectUse = `
+`,
+      'app/models/audit-log.ts': `
 import Model, { attr } from '@ember-data/model';
 import AuditableMixin from '../mixins/auditable';
 
 export default class AuditLog extends Model.extend(AuditableMixin) {
   @attr('string') action;
 }
-`;
-
-    const modelsDir = join(tempDir, 'app/models');
-    const mixinsDir = join(tempDir, 'app/mixins');
-    mkdirSync(modelsDir, { recursive: true });
-    mkdirSync(mixinsDir, { recursive: true });
-
-    writeFileSync(join(mixinsDir, 'auditable.ts'), mixinSource);
-    writeFileSync(join(modelsDir, 'audited-record.ts'), modelWithTypeImport);
-    writeFileSync(join(modelsDir, 'audit-log.ts'), modelWithDirectUse);
+`,
+    });
 
     await runMigration(options);
 
@@ -790,4 +702,3 @@ export default class AuditLog extends Model.extend(AuditableMixin) {
     expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('type-only import files');
   });
 });
-
