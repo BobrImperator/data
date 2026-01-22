@@ -41,8 +41,8 @@ export default class BaseModel extends Model {
       [
         {
           pattern: 'test-app/core/*',
-          dir: join(tempDir, 'app/core/*')
-        }
+          dir: join(tempDir, 'app/core/*'),
+        },
       ], // additional model sources with mapping
       undefined, // no additional mixin sources
       {
@@ -79,8 +79,8 @@ export default class SpecialModel extends Model {
       [
         {
           pattern: '@mylib/core/special-model',
-          dir: join(tempDir, 'libraries/core/src/special-model')
-        }
+          dir: join(tempDir, 'libraries/core/src/special-model'),
+        },
       ],
       undefined,
       {
@@ -95,15 +95,10 @@ export default class SpecialModel extends Model {
   });
 
   it('should report errors for missing intermediate models', () => {
-    const result = processIntermediateModelsToTraits(
-      ['non-existent/model'],
-      undefined,
-      undefined,
-      {
-        verbose: false,
-        debug: false,
-      }
-    );
+    const result = processIntermediateModelsToTraits(['non-existent/model'], undefined, undefined, {
+      verbose: false,
+      debug: false,
+    });
 
     // Should report error for missing model
     expect(result.errors.length).toBe(1);
@@ -132,8 +127,8 @@ export default class DataFieldModel extends Model {
       [
         {
           pattern: 'test-app/core/*',
-          dir: join(tempDir, 'app/core/*')
-        }
+          dir: join(tempDir, 'app/core/*'),
+        },
       ],
       undefined,
       {

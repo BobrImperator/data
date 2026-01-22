@@ -44,7 +44,7 @@ function findFixtureTests(): TestCase[] {
           name: `${category}/${baseName}`,
           inputPath,
           outputPath,
-          type: category === 'mixins' ? 'mixin' : 'model'
+          type: category === 'mixins' ? 'mixin' : 'model',
         });
       }
     }
@@ -71,18 +71,17 @@ describe('Schema Migration Fixture Tests', () => {
 
       // Get artifacts using the appropriate transform
       const baseName = name.split('/')[1]; // Get filename from 'models/basic-attributes'
-      const modelPath = type === 'mixin'
-        ? `app/mixins/${baseName}.js`
-        : `app/models/${baseName}.js`;
+      const modelPath = type === 'mixin' ? `app/mixins/${baseName}.js` : `app/models/${baseName}.js`;
 
       // Get artifacts using the appropriate transform with explicit typing
-      const artifacts: TransformArtifact[] = type === 'mixin'
-        ? (mixinToArtifacts(modelPath, input, DEFAULT_TEST_OPTIONS))
-        : (modelToArtifacts(modelPath, input, DEFAULT_TEST_OPTIONS));
+      const artifacts: TransformArtifact[] =
+        type === 'mixin'
+          ? mixinToArtifacts(modelPath, input, DEFAULT_TEST_OPTIONS)
+          : modelToArtifacts(modelPath, input, DEFAULT_TEST_OPTIONS);
 
       // Find the main schema artifact
-      const schemaArtifact: TransformArtifact | undefined = artifacts.find((artifact: TransformArtifact) =>
-        artifact.type === 'schema' || artifact.type === 'trait'
+      const schemaArtifact: TransformArtifact | undefined = artifacts.find(
+        (artifact: TransformArtifact) => artifact.type === 'schema' || artifact.type === 'trait'
       );
 
       if (!schemaArtifact) {

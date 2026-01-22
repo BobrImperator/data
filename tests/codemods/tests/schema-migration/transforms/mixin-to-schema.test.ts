@@ -441,15 +441,15 @@ export default BaseModelMixin;
 `.trim();
 
       const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource, {
-        appImportPrefix: "test-app"
+        appImportPrefix: 'test-app',
       });
 
       // Should find both trait fields and extension properties
       expect(artifacts.length).toBeGreaterThan(0);
 
-      const trait = artifacts.find(a => a.type === 'trait');
-      const extension = artifacts.find(a => a.type === 'extension');
-      const traitType = artifacts.find(a => a.type === 'trait-type');
+      const trait = artifacts.find((a) => a.type === 'trait');
+      const extension = artifacts.find((a) => a.type === 'extension');
+      const traitType = artifacts.find((a) => a.type === 'trait-type');
 
       // Should have trait because it has @attr field and extended traits
       expect(trait).toBeDefined();
@@ -499,15 +499,15 @@ export default BaseModelMixin;
 `.trim();
 
       const artifacts = toArtifacts('/app/mixins/base-model.ts', mixinSource, {
-        appImportPrefix: 'test-app'
+        appImportPrefix: 'test-app',
       });
 
       expect(artifacts.length).toBeGreaterThan(0);
 
       // Should not have trait (no @attr fields), but should have extension
-      const trait = artifacts.find(a => a.type === 'trait');
-      const extension = artifacts.find(a => a.type === 'extension');
-      const traitType = artifacts.find(a => a.type === 'trait-type');
+      const trait = artifacts.find((a) => a.type === 'trait');
+      const extension = artifacts.find((a) => a.type === 'extension');
+      const traitType = artifacts.find((a) => a.type === 'trait-type');
 
       expect(trait).toBeDefined(); // Has extended traits
       expect(traitType).toBeDefined(); // Always generates type interface
@@ -544,7 +544,7 @@ export default NestedCastMixin;
 
       expect(artifacts.length).toBeGreaterThan(0);
 
-      const extension = artifacts.find(a => a.type === 'extension');
+      const extension = artifacts.find((a) => a.type === 'extension');
       expect(extension).toBeDefined();
       expect(extension?.code).toContain('computedProp');
     });
@@ -586,7 +586,7 @@ export default Mixin.createWithMixins(BaseModelMixin, TimestampMixin, {
 });`;
 
       const artifacts = toArtifacts('app/mixins/fileable.js', input, {
-        appImportPrefix: 'test-app'
+        appImportPrefix: 'test-app',
       });
 
       // Should produce trait and type artifacts (no extension since no methods/computed properties)

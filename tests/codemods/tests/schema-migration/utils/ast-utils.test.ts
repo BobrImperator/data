@@ -264,7 +264,9 @@ describe('AST utilities', () => {
       };
 
       const result = transformModelToResourceImport('workstreamable', 'User', options);
-      expect(result).toBe("type { WorkstreamableTrait as Workstreamable } from 'my-app/data/traits/workstreamable.schema.types'");
+      expect(result).toBe(
+        "type { WorkstreamableTrait as Workstreamable } from 'my-app/data/traits/workstreamable.schema.types'"
+      );
     });
 
     it('prioritizes resources, falls back to traits when no model exists', () => {
