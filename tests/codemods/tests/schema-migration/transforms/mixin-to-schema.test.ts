@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -7,6 +8,11 @@ import type { FinalOptions } from '@ember-data/codemods/schema-migration/config.
 
 import { toArtifacts } from '../../../../../packages/codemods/src/schema-migration/processors/mixin.ts';
 import { parseFile } from '../../../../../packages/codemods/src/schema-migration/utils/file-parser.js';
+import { SchemaEntity } from '../../../../../packages/codemods/src/schema-migration/utils/schema-entity.js';
+
+function entityFromSource(path: string, source: string, opts: FinalOptions): SchemaEntity {
+  return SchemaEntity.fromParsedFile(parseFile(path, source, opts));
+}
 
 describe('mixin-to-schema transform (artifacts)', () => {
   let tempDir: string;
@@ -44,7 +50,7 @@ describe('mixin-to-schema transform (artifacts)', () => {
 
 export default Mixin.create({});`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/empty.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/empty.js', input, options), options);
       expect(artifacts).toHaveLength(1);
 
       const trait = artifacts.find((a) => a.type === 'trait');
@@ -76,7 +82,7 @@ export default Mixin.create({
 	titleCaseName: computed('name', function () { return (this.name || '').toUpperCase(); })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/fileable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/fileable.js', input, options), options);
       expect(artifacts).toHaveLength(3); // trait, extension, and resource-type-stub for 'file'
 
       const trait = artifacts.find((a) => a.type === 'trait');
@@ -140,7 +146,7 @@ import { attr } from '@ember-data/model';
 
 export default MyMixin.create({ name: attr('string') });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/aliased.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/aliased.js', input, options), options);
       expect(
         artifacts.map((a) => ({ type: a.type, name: a.name, suggestedFileName: a.suggestedFileName }))
       ).toMatchSnapshot('metadata');
@@ -154,7 +160,7 @@ import { hasMany } from '@ember-data/model';
 const Fileable = Mixin.create({ files: hasMany('file', { async: false }) });
 export default Fileable;`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/fileable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/fileable.js', input, options), options);
       expect(
         artifacts.map((a) => ({ type: a.type, name: a.name, suggestedFileName: a.suggestedFileName }))
       ).toMatchSnapshot('metadata');
@@ -166,7 +172,7 @@ export default Fileable;`;
 
 export default SomethingElse.create({ name: attr('string') });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/not-ember-mixin.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/not-ember-mixin.js', input, options), options);
       expect(artifacts).toHaveLength(0);
     });
 
@@ -179,7 +185,7 @@ export default Mixin.create({
 	computedValue: computed(function() { return 'computed'; })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/no-traits.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/no-traits.js', input, options), options);
       expect(
         artifacts.map((a) => ({ type: a.type, name: a.name, suggestedFileName: a.suggestedFileName }))
       ).toMatchSnapshot('metadata');
@@ -201,7 +207,7 @@ export default Mixin.create({
 	})
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/plannable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/plannable.js', input, options), options);
       expect(
         artifacts.map((a) => ({ type: a.type, name: a.name, suggestedFileName: a.suggestedFileName }))
       ).toMatchSnapshot('metadata');
@@ -237,7 +243,7 @@ export default Mixin.create({
 	},
 });`;
 
-      const artifacts = toArtifacts(parseFile('apps/client/app/mixins/fileable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('apps/client/app/mixins/fileable.js', input, options), options);
       expect(artifacts).toHaveLength(3); // Trait, extension, and resource-type-stub for 'file'
       expect(
         artifacts.map((a) => ({ type: a.type, suggestedFileName: a.suggestedFileName, name: a.name }))
@@ -263,7 +269,7 @@ export default Mixin.create({
 	customProp: computed('name', function() { return this.name; })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/default-source.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/default-source.js', input, options), options);
       expect(artifacts.map((a) => ({ type: a.type, name: a.name }))).toMatchSnapshot('artifact types');
       expect(artifacts.map((a) => a.code)).toMatchSnapshot('generated code');
     });
@@ -283,7 +289,7 @@ export default Mixin.create({
         ...options,
         emberDataImportSource: '@my-custom/model',
       };
-      const artifacts = toArtifacts(parseFile('app/mixins/custom-source.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/custom-source.js', input, opts), opts);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -302,7 +308,7 @@ export default Mixin.create({
         ...options,
         emberDataImportSource: '@auditboard/warp-drive/v1/model',
       };
-      const artifacts = toArtifacts(parseFile('app/mixins/auditboard-source.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/auditboard-source.js', input, opts), opts);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -318,7 +324,7 @@ export default Mixin.create({
 	customProp: computed('name', function() { return this.name; })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/unsupported-source.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/unsupported-source.js', input, options), options);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -332,7 +338,7 @@ export default Mixin.create({
 	owner: oneRelation('user')
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/aliased-imports.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/aliased-imports.js', input, options), options);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -346,7 +352,7 @@ export default Mixin.create({
 	name: attribute('string') // Should be ignored, treated as regular function call
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/renamed-mixed-sources.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/renamed-mixed-sources.js', input, options), options);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -360,7 +366,7 @@ export default Mixin.create({
 	customProp: computed('name', function() { return this.name; })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/no-valid-imports.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/no-valid-imports.js', input, options), options);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -372,7 +378,7 @@ export default Mixin.create({
 	owner: belongsTo('user', { async: true })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/belongs-to.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/belongs-to.js', input, options), options);
       expect(artifacts).toMatchSnapshot();
     });
 
@@ -383,7 +389,7 @@ export default class MyClass {
 	name = 'test';
 }`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/not-a-mixin.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/not-a-mixin.js', input, options), options);
       expect(artifacts).toHaveLength(0);
     });
 
@@ -399,7 +405,7 @@ export default Mixin.create({
         ...options,
         emberDataImportSource: '@my-custom/model',
       };
-      const artifacts = toArtifacts(parseFile('app/mixins/cli-option.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/cli-option.js', input, opts), opts);
       expect(artifacts).toMatchSnapshot();
     });
   });
@@ -415,7 +421,7 @@ export default Mixin.create({
 	isActive: attr('boolean', { defaultValue: false })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/fileable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/fileable.js', input, options), options);
 
       // Should have trait and resource-type-stub for 'file' (no extension if no computed/methods)
       expect(artifacts).toHaveLength(2);
@@ -443,7 +449,7 @@ export default Mixin.create({
 	}
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/nameable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/nameable.js', input, options), options);
 
       // Should have trait and extension artifacts (types merged into trait)
       expect(artifacts).toHaveLength(2);
@@ -467,7 +473,7 @@ export default Mixin.create({
 	author: belongsTo('user', { async: true })
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/simple.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/simple.js', input, options), options);
 
       // Should have trait and resource-type-stub for 'user' (no extension for data-only mixins)
       expect(artifacts).toHaveLength(2);
@@ -494,7 +500,7 @@ export default Mixin.create({
       };
 
       const opts = { ...options, typeMapping: customTypeMappings };
-      const artifacts = toArtifacts(parseFile('app/mixins/typed.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/typed.js', input, opts), opts);
       const trait = artifacts.find((a) => a.type === 'trait');
 
       expect(trait?.code).toMatchSnapshot('mixin custom type mappings interface');
@@ -534,7 +540,7 @@ export default BaseModelMixin;
         ...options,
         appImportPrefix: 'test-app',
       };
-      const artifacts = toArtifacts(parseFile('/app/mixins/base-model.ts', mixinSource, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('/app/mixins/base-model.ts', mixinSource, opts), opts);
 
       // Should find both trait fields and extension properties
       expect(artifacts.length).toBeGreaterThan(0);
@@ -592,7 +598,7 @@ export default BaseModelMixin;
         ...options,
         appImportPrefix: 'test-app',
       };
-      const artifacts = toArtifacts(parseFile('/app/mixins/base-model.ts', mixinSource, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('/app/mixins/base-model.ts', mixinSource, opts), opts);
 
       expect(artifacts.length).toBeGreaterThan(0);
 
@@ -626,7 +632,7 @@ const NestedCastMixin = Mixin.create({
 export default NestedCastMixin;
 `.trim();
 
-      const artifacts = toArtifacts(parseFile('/app/mixins/nested-cast.ts', mixinSource, options), options);
+      const artifacts = toArtifacts(entityFromSource('/app/mixins/nested-cast.ts', mixinSource, options), options);
 
       expect(artifacts.length).toBeGreaterThan(0);
 
@@ -648,11 +654,11 @@ export default Mixin.create({
 
       // Test with mirror flag
       const mirrorOpts = { ...options, mirror: true };
-      const artifactsMirror = toArtifacts(parseFile('app/mixins/basic.js', input, mirrorOpts), mirrorOpts);
+      const artifactsMirror = toArtifacts(entityFromSource('app/mixins/basic.js', input, mirrorOpts), mirrorOpts);
       const traitMirror = artifactsMirror.find((a) => a.type === 'trait');
 
       // Test without mirror flag
-      const artifactsRegular = toArtifacts(parseFile('app/mixins/basic.js', input, options), options);
+      const artifactsRegular = toArtifacts(entityFromSource('app/mixins/basic.js', input, options), options);
       const traitRegular = artifactsRegular.find((a) => a.type === 'trait');
 
       // Mixins themselves don't generate @warp-drive imports, so they should be the same
@@ -676,7 +682,7 @@ export default Mixin.createWithMixins(BaseModelMixin, TimestampMixin, {
         ...options,
         appImportPrefix: 'test-app',
       };
-      const artifacts = toArtifacts(parseFile('app/mixins/fileable.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/fileable.js', input, opts), opts);
 
       // Should produce trait and resource-type-stub for 'file' (no extension since no methods/computed properties)
       expect(artifacts).toHaveLength(2);
@@ -716,7 +722,7 @@ export default Mixin.createWithMixins(BaseModelMixin, {
         ...options,
         appImportPrefix: 'test-app',
       };
-      const artifacts = toArtifacts(parseFile('app/mixins/describable.js', input, opts), opts);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/describable.js', input, opts), opts);
 
       const trait = artifacts.find((a) => a.type === 'trait');
 
@@ -737,7 +743,7 @@ export default Mixin.create({
 	description: attr('string')
 });`;
 
-      const artifacts = toArtifacts(parseFile('app/mixins/describable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/describable.js', input, options), options);
 
       const trait = artifacts.find((a) => a.type === 'trait');
 
@@ -769,7 +775,7 @@ export default Mixin.create({
         debug: false,
       };
 
-      const artifacts = toArtifacts(parseFile('app/mixins/fileable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/fileable.js', input, options), options);
 
       // Should have trait (with merged types) and resource-type-stub artifacts
       expect(artifacts).toHaveLength(3); // trait, file stub, user stub
@@ -811,7 +817,7 @@ export default Mixin.create({
         debug: false,
       };
 
-      const artifacts = toArtifacts(parseFile('app/mixins/commentable.js', input, options), options);
+      const artifacts = toArtifacts(entityFromSource('app/mixins/commentable.js', input, options), options);
 
       // Should have trait (with merged types) and multiple resource-type-stub artifacts
       expect(artifacts.length).toBeGreaterThanOrEqual(4); // trait + 3 stubs

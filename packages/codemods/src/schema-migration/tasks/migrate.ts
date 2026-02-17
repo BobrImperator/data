@@ -5,12 +5,8 @@ import { InstanciatedLogger, logger } from '../../../utils/logger.js';
 import { Codemod } from '../codemod.js';
 import type { FinalOptions, MigrateOptions, TransformOptions } from '../config.js';
 import { toArtifacts as mixinToArtifacts } from '../processors/mixin.js';
-import {
-  preAnalyzeConnectedMixinExtensions,
-  processIntermediateModelsToTraits,
-  toArtifacts as modelToArtifacts,
-} from '../processors/model.js';
-import type { ParsedFile } from '../utils/file-parser.js';
+import { processIntermediateModelsToTraits, toArtifacts as modelToArtifacts } from '../processors/model.js';
+import type { SchemaEntity } from '../utils/schema-entity.js';
 
 const migrateLog = logger.for('migrate');
 
@@ -277,10 +273,10 @@ function writeIntermediateArtifacts(artifacts: Artifact[], finalOptions: FinalOp
   }
 }
 
-type ArtifactTransformer = (parsedFile: ParsedFile, options: TransformOptions) => Artifact[];
+type ArtifactTransformer = (entity: SchemaEntity, options: TransformOptions) => Artifact[];
 
 interface ProcessFilesOptions {
-  parsedFiles: Map<string, ParsedFile>;
+  parsedFiles: Map<string, SchemaEntity>;
   transformer: ArtifactTransformer;
   finalOptions: FinalOptions;
   log: InstanciatedLogger;
@@ -295,13 +291,13 @@ function processFiles({ parsedFiles, transformer, finalOptions, log }: ProcessFi
   const skipped = [];
   const errors = [];
 
-  for (const [filePath, parsedFile] of parsedFiles) {
+  for (const [filePath, entity] of parsedFiles) {
     try {
       if (finalOptions.verbose) {
         log.debug(`🔄 Processing: ${filePath}`);
       }
 
-      const artifacts = transformer(parsedFile, finalOptions);
+      const artifacts = transformer(entity, finalOptions);
 
       if (artifacts.length > 0) {
         processed++;
@@ -388,7 +384,7 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   finalOptions.allMixinFiles = Array.from(codemod.input.parsedMixins.keys());
   finalOptions.modelsWithExtensions = codemod.modelsWithExtensions;
   finalOptions.modelConnectedMixins = codemod.mixinsImportedByModels;
-  preAnalyzeConnectedMixinExtensions(codemod.input.parsedMixins, finalOptions);
+  finalOptions.entityRegistry = codemod.entityRegistry;
 
   // Process intermediate models to generate trait artifacts first
   // This must be done before processing regular models that extend these intermediate models
@@ -420,9 +416,20 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     }
   }
 
+  // Build entity maps from the registry for processFiles
+  const modelEntities = new Map<string, SchemaEntity>();
+  const mixinEntities = new Map<string, SchemaEntity>();
+  for (const [filePath, entity] of codemod.entityRegistry) {
+    if (entity.kind === 'model') {
+      modelEntities.set(filePath, entity);
+    } else if (entity.kind === 'mixin') {
+      mixinEntities.set(filePath, entity);
+    }
+  }
+
   // Process model files using pre-parsed data
   const modelResults = processFiles({
-    parsedFiles: codemod.input.parsedModels,
+    parsedFiles: modelEntities,
     transformer: modelToArtifacts,
     finalOptions,
     log,
@@ -430,7 +437,7 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
 
   // Process mixin files using pre-parsed data
   const mixinResults = processFiles({
-    parsedFiles: codemod.input.parsedMixins,
+    parsedFiles: mixinEntities,
     transformer: mixinToArtifacts,
     finalOptions,
     log,
