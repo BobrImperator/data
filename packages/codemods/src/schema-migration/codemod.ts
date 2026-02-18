@@ -130,25 +130,7 @@ export class Codemod {
 
   findMixinsUsedByModels() {
     const result = analyzeModelMixinUsage(this, this.finalOptions);
-    this.mixinsImportedByModels = result.connectedMixins;
-    this.finalOptions.modelToMixinsMap = result.modelToMixinsMap;
-
     linkEntities(this.entityRegistry, result.modelToMixinsMap);
-  }
-
-  findModelExtensions() {
-    this.logger.info(`🔍 Analyzing which models will have extensions...`);
-    for (const [modelFile, parsedModel] of this.input.parsedModels) {
-      try {
-        // Use pre-parsed data instead of re-parsing
-        if (parsedModel.hasExtension) {
-          this.modelsWithExtensions.add(parsedModel.baseName);
-        }
-      } catch (error) {
-        this.logger.error(`❌ Error analyzing model ${modelFile} for extensions: ${String(error)}`);
-      }
-    }
-    this.logger.info(`✅ Found ${this.modelsWithExtensions.size} models with extensions.`);
   }
 
   parseAllFiles() {

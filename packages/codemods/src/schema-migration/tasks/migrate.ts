@@ -362,7 +362,6 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
 
   if (!options.mixinsOnly) {
     codemod.findMixinsUsedByModels();
-    codemod.findModelExtensions();
   }
 
   const filesToProcess: number = codemod.input.mixins.size + codemod.input.models.size;
@@ -378,12 +377,6 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   log.warn(`📋 Skipped ${codemod.input.skipped.length} files total`);
   log.warn(`📋 Errors found while reading files: ${codemod.input.errors.length}`);
 
-  // Unfortunately a lot of the utils rely on the options object to carry a lot of the data currently
-  // It'd take a lot of changes to make them use the codemod instance instead.
-  finalOptions.allModelFiles = Array.from(codemod.input.parsedModels.keys());
-  finalOptions.allMixinFiles = Array.from(codemod.input.parsedMixins.keys());
-  finalOptions.modelsWithExtensions = codemod.modelsWithExtensions;
-  finalOptions.modelConnectedMixins = codemod.mixinsImportedByModels;
   finalOptions.entityRegistry = codemod.entityRegistry;
 
   // Process intermediate models to generate trait artifacts first

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+
 import { describe, expect, it } from 'vitest';
 
 import { toArtifacts } from '../../../../../packages/codemods/src/schema-migration/processors/model.js';
@@ -776,6 +776,69 @@ export default class RelationshipModel extends Model {
     });
   });
 
+  describe('relative imports transformation', () => {
+    it('transforms relative model imports to schema type imports when converting a model', () => {
+      const input = `import type { ConnectedEntityType } from 'soxhub-client/components/module-automations/const/automation-workflow-instance';
+import Model, { attr, belongsTo } from '@ember-data/model';
+import type AuditableEntity from './auditable-entity';
+import type AutomationWorkflowVersion from './automation-workflow-version';
+export default class TestModel extends Model {
+  @attr('string') name;
+  @belongsTo('auditable-entity', { async: false }) auditableEntity;
+  @belongsTo('automation-workflow-version', { async: false }) version;
+}`;
+
+      const artifacts = toArtifacts(entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS), DEFAULT_TEST_OPTIONS);
+      const schema = artifacts.find((a) => a.type === 'schema');
+      expect(schema).toBeDefined();
+      const result = schema!.code;
+
+      // Should transform relative type imports to schema resource imports
+      expect(result).toContain("import type { AuditableEntity } from 'test-app/data/resources/auditable-entity.schema';");
+      expect(result).toContain(
+        "import type { AutomationWorkflowVersion } from 'test-app/data/resources/automation-workflow-version.schema';"
+      );
+
+      // Should not contain bad import paths with double extensions
+      expect(result).not.toContain('.ts.schema');
+      expect(result).not.toContain('.js.schema');
+
+      // Should not retain original default type imports
+      expect(result).not.toContain("import type AuditableEntity from './auditable-entity';");
+      expect(result).not.toContain("import type AutomationWorkflowVersion from './automation-workflow-version';");
+
+      // Should convert the model to a schema
+      expect(result).toContain('export default TestSchema');
+    });
+
+    it('only transforms type imports with relative paths', () => {
+      const input = `import { someFunction } from './some-utility';
+import Model, { attr } from '@ember-data/model';
+import type SomeType from './some-type';
+import RegularImport from './regular-import';
+import type { NamedType } from './named-type';
+import type AbsoluteType from 'some-package/type';
+export default class TestModel extends Model {
+  @attr('string') name;
+}`;
+
+      const artifacts = toArtifacts(entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS), DEFAULT_TEST_OPTIONS);
+      const schema = artifacts.find((a) => a.type === 'schema');
+      expect(schema).toBeDefined();
+      const result = schema!.code;
+
+      // Non-relationship type imports should not appear in generated schema
+      expect(result).not.toContain('SomeType');
+      expect(result).not.toContain('someFunction');
+      expect(result).not.toContain('RegularImport');
+      expect(result).not.toContain('NamedType');
+      expect(result).not.toContain('AbsoluteType');
+
+      // Should still generate the schema
+      expect(result).toContain('export default TestSchema');
+    });
+  });
+
   describe('trait import aliasing', () => {
     it('generates aliased trait imports for backward compatibility', () => {
       const input = `import Model, { belongsTo } from '@ember-data/model';
@@ -785,10 +848,7 @@ export default class TestModel extends Model.extend(WorkstreamableMixin) {
   @belongsTo('workstreamable', { async: false }) workstreamable;
 }`;
 
-      const opts = createTestOptions({
-        // Mark workstreamable as a connected mixin so it imports from traits
-        modelConnectedMixins: new Set(['app/mixins/workstreamable.js']),
-      });
+      const opts = createTestOptions({});
       const artifacts = toArtifacts(entityFromSource('app/models/test-model.js', input, opts), opts);
 
       const schemaType = artifacts.find((a) => a.type === 'schema');

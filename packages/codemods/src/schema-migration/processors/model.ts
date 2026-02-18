@@ -56,6 +56,7 @@ import type { ParsedFile } from '../utils/file-parser.js';
 import { isClassMethodSyntax } from '../utils/file-parser.js';
 import { replaceWildcardPattern } from '../utils/path-utils.js';
 import type { SchemaEntity } from '../utils/schema-entity.js';
+import { deriveExtensionName, deriveTraitInterfaceName } from '../utils/schema-entity.js';
 import {
   MODEL_NAME_SUFFIX_REGEX,
   normalizePath,
@@ -809,7 +810,7 @@ function generateIntermediateModelTraitArtifacts(
   }
 
   // Build the trait schema object
-  const traitSchemaName = `${traitPascalName}Trait`;
+  const traitSchemaName = deriveTraitInterfaceName(traitName);
   const traitSchemaObject = buildTraitSchemaObject(schemaFields, mixinTraits, { legacyFieldOrder: true });
 
   // Generate merged trait schema code (schema + types in one file)
@@ -843,7 +844,7 @@ function generateIntermediateModelTraitArtifacts(
       filePath,
       source,
       traitName,
-      `${traitPascalName}Extension`,
+      deriveExtensionName(traitName),
       extensionProperties,
       options,
       traitInterfaceName,
