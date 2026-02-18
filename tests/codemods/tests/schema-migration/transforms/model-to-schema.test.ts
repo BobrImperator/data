@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { toArtifacts } from '../../../../../packages/codemods/src/schema-migration/processors/model.js';
@@ -83,7 +82,7 @@ export default class Document extends Model.extend(FileableMixin, TimestampableM
 }`;
 
       const artifacts = toArtifacts(
-        parseFile('app/models/document.ts', input, DEFAULT_TEST_OPTIONS),
+        entityFromSource('app/models/document.ts', input, DEFAULT_TEST_OPTIONS),
         DEFAULT_TEST_OPTIONS
       );
       // Schema now includes merged types, so we have: schema (with types) + extension
@@ -691,7 +690,7 @@ export default class UnknownTypesModel extends Model {
 }`;
 
       const artifacts = toArtifacts(
-        entityFromSource('app/models/unknown-types-model.js', input, DEFAULT_TEST_OPTIONS),
+        entityFromSource('app/models/unknown-types-model.ts', input, DEFAULT_TEST_OPTIONS),
         DEFAULT_TEST_OPTIONS
       );
       // Types are now merged into schema
@@ -788,13 +787,18 @@ export default class TestModel extends Model {
   @belongsTo('automation-workflow-version', { async: false }) version;
 }`;
 
-      const artifacts = toArtifacts(entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS), DEFAULT_TEST_OPTIONS);
+      const artifacts = toArtifacts(
+        entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS),
+        DEFAULT_TEST_OPTIONS
+      );
       const schema = artifacts.find((a) => a.type === 'schema');
       expect(schema).toBeDefined();
       const result = schema!.code;
 
       // Should transform relative type imports to schema resource imports
-      expect(result).toContain("import type { AuditableEntity } from 'test-app/data/resources/auditable-entity.schema';");
+      expect(result).toContain(
+        "import type { AuditableEntity } from 'test-app/data/resources/auditable-entity.schema';"
+      );
       expect(result).toContain(
         "import type { AutomationWorkflowVersion } from 'test-app/data/resources/automation-workflow-version.schema';"
       );
@@ -822,7 +826,10 @@ export default class TestModel extends Model {
   @attr('string') name;
 }`;
 
-      const artifacts = toArtifacts(entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS), DEFAULT_TEST_OPTIONS);
+      const artifacts = toArtifacts(
+        entityFromSource('app/models/test.ts', input, DEFAULT_TEST_OPTIONS),
+        DEFAULT_TEST_OPTIONS
+      );
       const schema = artifacts.find((a) => a.type === 'schema');
       expect(schema).toBeDefined();
       const result = schema!.code;

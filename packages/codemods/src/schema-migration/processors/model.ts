@@ -56,7 +56,7 @@ import type { ParsedFile } from '../utils/file-parser.js';
 import { isClassMethodSyntax } from '../utils/file-parser.js';
 import { replaceWildcardPattern } from '../utils/path-utils.js';
 import type { SchemaEntity } from '../utils/schema-entity.js';
-import { deriveExtensionName, deriveTraitInterfaceName } from '../utils/schema-entity.js';
+import { deriveExtensionName, deriveSchemaName, deriveTraitInterfaceName } from '../utils/schema-entity.js';
 import {
   MODEL_NAME_SUFFIX_REGEX,
   normalizePath,
@@ -810,13 +810,14 @@ function generateIntermediateModelTraitArtifacts(
   }
 
   // Build the trait schema object
-  const traitSchemaName = deriveTraitInterfaceName(traitName);
+  const traitSchemaName = deriveSchemaName(traitName);
+  const traitInterfaceName = deriveTraitInterfaceName(traitName);
   const traitSchemaObject = buildTraitSchemaObject(schemaFields, mixinTraits, { legacyFieldOrder: true });
 
   // Generate merged trait schema code (schema + types in one file)
   const mergedTraitSchemaCode = generateMergedSchemaCode({
     baseName: traitName,
-    interfaceName: traitSchemaName,
+    interfaceName: traitInterfaceName,
     schemaName: traitSchemaName,
     schemaObject: traitSchemaObject,
     properties: traitFieldTypes,
@@ -836,7 +837,6 @@ function generateIntermediateModelTraitArtifacts(
   if (extensionProperties.length > 0) {
     // Create the extension artifact preserving original file content
     // For traits, extensions should extend the trait interface
-    const traitInterfaceName = traitPascalName;
     const traitImportPath = options?.traitsImport
       ? `${options.traitsImport}/${traitName}.schema`
       : `../traits/${traitName}.schema`;
