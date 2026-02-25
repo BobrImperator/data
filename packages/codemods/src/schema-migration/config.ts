@@ -197,6 +197,7 @@ export interface TransformOptions {
     import: string;
     extension?: string;
     trait?: string;
+    sourcePath?: string;
   }>;
   /** Registry of SchemaArtifact instances keyed by file path */
   entityRegistry?: SchemaArtifactRegistry;

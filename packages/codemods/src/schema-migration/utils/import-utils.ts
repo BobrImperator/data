@@ -149,6 +149,14 @@ function shouldImportFromTraits(relatedType: string, options?: TransformOptions)
     }
   }
 
+  if (options?.importSubstitutes) {
+    for (const sub of options.importSubstitutes) {
+      if (sub.sourcePath && sub.trait === relatedType) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 

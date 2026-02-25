@@ -359,6 +359,8 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     codemod.createDestinationDirectories();
   }
 
+  const substituteArtifacts = codemod.resolveImportSubstitutes();
+
   if (!options.mixinsOnly) {
     await codemod.findModels();
   }
@@ -416,6 +418,11 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     } catch (error) {
       log.error(`❌ Error processing intermediate models: ${String(error)}`);
     }
+  }
+
+  if (substituteArtifacts.length > 0) {
+    writeIntermediateArtifacts(substituteArtifacts, finalOptions, log);
+    log.info(`✅ Processed ${substituteArtifacts.length} importSubstitute artifacts`);
   }
 
   // Build entity maps from the registry for processFiles

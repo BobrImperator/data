@@ -23,7 +23,7 @@ export interface ConfigOptions {
   mixinsOnly?: boolean;
   skipProcessed?: boolean;
   generateExternalResources?: boolean;
-  importSubstitutes?: Array<{ import: string; extension?: string; trait?: string }>;
+  importSubstitutes?: Array<{ import: string; extension?: string; trait?: string; sourcePath?: string }>;
   config?: string;
   input?: string;
   inputDir?: string;
@@ -333,6 +333,13 @@ function resolvePathsInternal(config: ConfigOptions, baseDir: string): ConfigOpt
     resolved.additionalMixinSources = resolved.additionalMixinSources.map((source) => ({
       ...source,
       dir: isAbsolute(source.dir) ? source.dir : resolve(baseDir, source.dir),
+    }));
+  }
+
+  if (resolved.importSubstitutes) {
+    resolved.importSubstitutes = resolved.importSubstitutes.map((sub) => ({
+      ...sub,
+      sourcePath: sub.sourcePath && !isAbsolute(sub.sourcePath) ? resolve(baseDir, sub.sourcePath) : sub.sourcePath,
     }));
   }
 

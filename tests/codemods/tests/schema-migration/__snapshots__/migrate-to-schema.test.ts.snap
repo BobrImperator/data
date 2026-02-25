@@ -1769,6 +1769,258 @@ export interface TsMixin extends WithLegacy<TsMixinTrait> {}
 }
 `;
 
+exports[`migrate-to-schema batch operation > importSubstitutes sourcePath falls back to static names when file not found > importSubstitutes sourcePath fallback files 1`] = `
+{
+  "resources/": "__dir__",
+  "resources/simple.schema.ts": "
+import type { Type } from '@ember-data/core-types/symbols';
+import type { FallbackTraitTrait } from 'test-app/data/traits/fallback-trait.schema';
+const SimpleSchema = {
+  'type': 'simple',
+  'legacy': true,
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'title',
+      'type': 'string'
+    }
+  ],
+  'traits': [
+    'fallback-trait'
+  ],
+  'objectExtensions': [
+    'fallback-ext'
+  ]
+} as const;
+
+export default SimpleSchema;
+
+export interface Simple extends FallbackTraitTrait {
+  readonly [Type]: 'simple';
+  readonly title: string | null;
+}",
+  "traits/": "__dir__",
+}
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes sourcePath with explicit trait/extension names > importSubstitutes sourcePath explicit names files 1`] = `
+{
+  "resources/": "__dir__",
+  "resources/simple.schema.ts": "
+import type { Type } from '@ember-data/core-types/symbols';
+import type { MyCustomTraitTrait } from 'test-app/data/traits/my-custom-trait.schema';
+const SimpleSchema = {
+  'type': 'simple',
+  'legacy': true,
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'title',
+      'type': 'string'
+    }
+  ],
+  'traits': [
+    'my-custom-trait'
+  ],
+  'objectExtensions': [
+    'my-custom-ext'
+  ]
+} as const;
+
+export default SimpleSchema;
+
+export interface Simple extends MyCustomTraitTrait {
+  readonly [Type]: 'simple';
+  readonly title: string | null;
+}",
+  "traits/": "__dir__",
+  "traits/base.schema.ts": "
+import type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private';
+const BaseSchema = {
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'rawErrors',
+      'type': 'string'
+    }
+  ]
+} as const;
+
+export default BaseSchema;
+
+export interface BaseTrait {
+  id: string | null;
+  readonly rawErrors: string | null;
+  readonly isNew: boolean;
+  readonly hasDirtyAttributes: boolean;
+  readonly isDeleted: boolean;
+  readonly isSaving: boolean;
+  readonly isValid: boolean;
+  readonly isError: boolean;
+  readonly isLoaded: boolean;
+  readonly isEmpty: boolean;
+  save: (options?: Record<string, unknown>) => Promise<this>;
+  reload: (options?: Record<string, unknown>) => Promise<this>;
+  deleteRecord: () => void;
+  unloadRecord: () => void;
+  destroyRecord: (options?: Record<string, unknown>) => Promise<void>;
+  rollbackAttributes: () => void;
+  belongsTo: (propertyName: string) => BelongsToReference;
+  hasMany: (propertyName: string) => HasManyReference;
+  serialize: (options?: Record<string, unknown>) => unknown;
+  readonly errors: Errors;
+  readonly adapterError: Error | null;
+  readonly isReloading: boolean;
+}",
+}
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes sourcePath with explicit trait/extension names > importSubstitutes sourcePath explicit names structure 1`] = `
+[
+  "resources/",
+  "resources/simple.schema.ts",
+  "traits/",
+  "traits/base.schema.ts",
+]
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath and BaseModel.extend(Mixin) > importSubstitutes sourcePath with mixin files 1`] = `
+{
+  "resources/": "__dir__",
+  "resources/allowed-role.schema.ts": "
+import type { Type } from '@ember-data/core-types/symbols';
+import type { PermissableTrait } from 'test-app/data/traits/permissable.schema';
+import type { BaseschemaTrait } from 'test-app/data/traits/BaseSchema.schema';
+const AllowedRoleSchema = {
+  'type': 'allowed-role',
+  'legacy': true,
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'roleName',
+      'type': 'string'
+    }
+  ],
+  'traits': [
+    'permissable',
+    'BaseSchema'
+  ]
+} as const;
+
+export default AllowedRoleSchema;
+
+export interface AllowedRole extends PermissableTrait, BaseschemaTrait {
+  readonly [Type]: 'allowed-role';
+  readonly roleName: string | null;
+}",
+  "traits/": "__dir__",
+  "traits/base.schema.js": "
+const BaseSchema = {
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'rawErrors',
+      'type': 'string'
+    }
+  ]
+};
+
+export default BaseSchema;",
+  "traits/permissable.schema.js": "
+const PermissableSchema = {
+  'name': 'permissable',
+  'mode': 'legacy',
+  'fields': [
+    {
+      'name': 'permissions',
+      'kind': 'attribute',
+      'type': 'object'
+    }
+  ]
+};
+
+export default PermissableSchema;",
+}
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath and BaseModel.extend(Mixin) > importSubstitutes sourcePath with mixin structure 1`] = `
+[
+  "resources/",
+  "resources/allowed-role.schema.ts",
+  "traits/",
+  "traits/base.schema.js",
+  "traits/permissable.schema.js",
+]
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath auto-derives trait from base model > importSubstitutes sourcePath auto-derive files 1`] = `
+{
+  "resources/": "__dir__",
+  "resources/brand-identity.schema.ts": "
+import type { Type } from '@ember-data/core-types/symbols';
+import type { BaseschemaTrait } from 'test-app/data/traits/BaseSchema.schema';
+const BrandIdentitySchema = {
+  'type': 'brand-identity',
+  'legacy': true,
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'name',
+      'type': 'string'
+    }
+  ],
+  'traits': [
+    'BaseSchema'
+  ]
+} as const;
+
+export default BrandIdentitySchema;
+
+export interface BrandIdentity extends BaseschemaTrait {
+  readonly [Type]: 'brand-identity';
+  readonly name: string | null;
+}",
+  "traits/": "__dir__",
+  "traits/base.schema.js": "
+const BaseSchema = {
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'rawErrors',
+      'type': 'string'
+    }
+  ]
+};
+
+export default BaseSchema;",
+}
+`;
+
+exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath auto-derives trait from base model > importSubstitutes sourcePath auto-derive structure 1`] = `
+[
+  "resources/",
+  "resources/brand-identity.schema.ts",
+  "traits/",
+  "traits/base.schema.js",
+]
+`;
+
 exports[`migrate-to-schema batch operation > mixin with attributes only is ONLY referenced as a trait in a schema > contains_only_a_trait 1`] = `
 {
   "resources/": "__dir__",

@@ -164,6 +164,10 @@
           "trait": {
             "type": "string",
             "description": "Trait name to add to models extending this base class"
+          },
+          "sourcePath": {
+            "type": "string",
+            "description": "Path to the source file of this base class. When provided and the file exists, the codemod analyzes it to auto-derive trait/extension names. Falls back to static trait/extension values if not found."
           }
         },
         "required": ["import"]

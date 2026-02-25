@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { glob } from 'glob';
 import { basename, extname, join, resolve } from 'path';
@@ -146,6 +146,7 @@ export class Codemod {
 
   mixinsImportedByModels: Set<string> = new Set();
   modelsWithExtensions: Set<string> = new Set();
+  resolvedSubstituteSourcePaths: Set<string> = new Set();
 
   constructor(logger: InstanciatedLogger, finalOptions: FinalOptions) {
     this.logger = logger;
@@ -204,6 +205,62 @@ export class Codemod {
     }
   }
 
+  resolveImportSubstitutes(): TransformArtifact[] {
+    const substitutes = this.finalOptions.importSubstitutes;
+    if (!substitutes) return [];
+
+    const allArtifacts: TransformArtifact[] = [];
+
+    for (const substitute of substitutes) {
+      if (!substitute.sourcePath) continue;
+
+      let filePath: string | null = null;
+      let source: string | null = null;
+
+      const candidates = [substitute.sourcePath, `${substitute.sourcePath}.ts`, `${substitute.sourcePath}.js`];
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+          try {
+            filePath = candidate;
+            source = readFileSync(candidate, 'utf-8');
+            break;
+          } catch {
+            // continue trying next candidate
+          }
+        }
+      }
+
+      if (!filePath || !source) {
+        this.logger.warn(
+          `Could not find source file for importSubstitute '${substitute.import}' at '${substitute.sourcePath}', falling back to static config`
+        );
+        continue;
+      }
+
+      this.resolvedSubstituteSourcePaths.add(filePath);
+
+      const artifacts = generateIntermediateModelTraitArtifacts(filePath, source, substitute.import, this.finalOptions);
+
+      if (artifacts.length > 0) {
+        const traitArtifact = artifacts.find((a) => a.type === 'trait');
+        if (traitArtifact && !substitute.trait) {
+          substitute.trait = traitArtifact.name;
+        }
+        const extensionArtifact = artifacts.find((a) => a.type === 'trait-extension');
+        if (extensionArtifact && !substitute.extension) {
+          substitute.extension = extensionArtifact.name;
+        }
+
+        allArtifacts.push(...artifacts);
+        this.logger.info(
+          `Generated ${artifacts.length} artifacts from importSubstitute source '${substitute.import}'`
+        );
+      }
+    }
+
+    return allArtifacts;
+  }
+
   async findModels() {
     // TODO: || './app/models'
     if (!this.finalOptions.modelSourceDir) {
@@ -229,6 +286,7 @@ export class Codemod {
           isIntermediateModel(file, this.finalOptions.intermediateModelPaths, this.finalOptions.additionalModelSources)
         )
           return 'intermediate-model';
+        if (this.resolvedSubstituteSourcePaths.has(file)) return 'already-processed';
         return null;
       },
       this.finalOptions,

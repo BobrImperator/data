@@ -1020,6 +1020,192 @@ export default Mixin.create({
     expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('readme_example');
   });
 
+  it('importSubstitutes with sourcePath auto-derives trait from base model', async () => {
+    prepareFiles(tempDir, {
+      'app/core/base-model.js': `
+import Model, { attr } from '@ember-data/model';
+
+export default class BaseModel extends Model {
+  @attr('string') rawErrors;
+}
+`,
+      'app/models/brand-identity.ts': `
+import { attr } from '@ember-data/model';
+import BaseModel from 'test-app/core/base-model';
+
+export default class BrandIdentity extends BaseModel {
+  @attr('string') declare name: string;
+}
+`,
+    });
+
+    const testOptions: MigrateOptions = {
+      ...options,
+      importSubstitutes: [
+        {
+          import: 'test-app/core/base-model',
+          sourcePath: join(tempDir, 'app/core/base-model.js'),
+        },
+      ],
+      additionalModelSources: [
+        {
+          pattern: 'test-app/core/',
+          dir: join(tempDir, 'app/core/'),
+        },
+      ],
+    };
+
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await runMigration(testOptions);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('importSubstitutes sourcePath auto-derive structure');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('importSubstitutes sourcePath auto-derive files');
+  });
+
+  it('importSubstitutes with sourcePath and BaseModel.extend(Mixin)', async () => {
+    prepareFiles(tempDir, {
+      'app/core/base-model.js': `
+import Model, { attr } from '@ember-data/model';
+
+export default class BaseModel extends Model {
+  @attr('string') rawErrors;
+}
+`,
+      'app/mixins/permissable.js': `
+import Mixin from '@ember/object/mixin';
+import { attr } from '@ember-data/model';
+
+export default Mixin.create({
+  permissions: attr('object'),
+});
+`,
+      'app/models/allowed-role.ts': `
+import { attr } from '@ember-data/model';
+import BaseModel from 'test-app/core/base-model';
+import Permissable from '../mixins/permissable';
+
+export default class AllowedRole extends BaseModel.extend(Permissable) {
+  @attr('string') declare roleName: string;
+}
+`,
+    });
+
+    const testOptions: MigrateOptions = {
+      ...options,
+      importSubstitutes: [
+        {
+          import: 'test-app/core/base-model',
+          sourcePath: join(tempDir, 'app/core/base-model.js'),
+        },
+      ],
+      additionalModelSources: [
+        {
+          pattern: 'test-app/core/',
+          dir: join(tempDir, 'app/core/'),
+        },
+      ],
+    };
+
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await runMigration(testOptions);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('importSubstitutes sourcePath with mixin structure');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('importSubstitutes sourcePath with mixin files');
+  });
+
+  it('importSubstitutes sourcePath falls back to static names when file not found', async () => {
+    prepareFiles(tempDir, {
+      'app/models/simple.ts': `
+import BaseModel from 'test-app/core/base-model';
+import { attr } from '@ember-data/model';
+
+export default class Simple extends BaseModel {
+  @attr('string') declare title: string;
+}
+`,
+    });
+
+    await runMigration({
+      ...options,
+      importSubstitutes: [
+        {
+          import: 'test-app/core/base-model',
+          sourcePath: join(tempDir, 'nonexistent/base-model.js'),
+          trait: 'fallback-trait',
+          extension: 'fallback-ext',
+        },
+      ],
+    });
+
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('importSubstitutes sourcePath fallback files');
+  });
+
+  it('importSubstitutes sourcePath with explicit trait/extension names', async () => {
+    prepareFiles(tempDir, {
+      'app/core/base-model.ts': `
+import Model, { attr } from '@ember-data/model';
+
+export default class BaseModel extends Model {
+  @attr('string') rawErrors;
+}
+`,
+      'app/models/simple.ts': `
+import BaseModel from 'test-app/core/base-model';
+import { attr } from '@ember-data/model';
+
+export default class Simple extends BaseModel {
+  @attr('string') declare title: string;
+}
+`,
+    });
+
+    const testOptions: MigrateOptions = {
+      ...options,
+      importSubstitutes: [
+        {
+          import: 'test-app/core/base-model',
+          sourcePath: join(tempDir, 'app/core/base-model.ts'),
+          trait: 'my-custom-trait',
+          extension: 'my-custom-ext',
+        },
+      ],
+      additionalModelSources: [
+        {
+          pattern: 'test-app/core/',
+          dir: join(tempDir, 'app/core/'),
+        },
+      ],
+    };
+
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await runMigration(testOptions);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('importSubstitutes sourcePath explicit names structure');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('importSubstitutes sourcePath explicit names files');
+  });
+
   it('regression: ember-data import without default import is respected', async () => {
     prepareFiles(tempDir, {
       'app/models/typed.ts': `
