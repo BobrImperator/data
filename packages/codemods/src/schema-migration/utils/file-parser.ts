@@ -713,6 +713,7 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
 
   // Check for fragment
   const fragmentImportLocal = findEmberImportLocalName(root, [FRAGMENT_BASE_SOURCE], options, filePath, process.cwd());
+  console.log('[detectFileType] fragment check:', { filePath, fragmentImportLocal, FRAGMENT_BASE_SOURCE });
   if (fragmentImportLocal) {
     const defaultExport = findDefaultExport(root, options);
     if (defaultExport) {
