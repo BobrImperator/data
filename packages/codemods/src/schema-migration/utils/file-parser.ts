@@ -711,8 +711,8 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
     return 'mixin';
   }
 
-  // Check for fragment — only match if the file has a direct import from the fragment source
-  const fragmentImportLocal = findEmberImportLocalName(root, [FRAGMENT_BASE_SOURCE], options);
+  // Check for fragment
+  const fragmentImportLocal = findEmberImportLocalName(root, [FRAGMENT_BASE_SOURCE], options, filePath, process.cwd());
   if (fragmentImportLocal) {
     const defaultExport = findDefaultExport(root, options);
     if (defaultExport) {

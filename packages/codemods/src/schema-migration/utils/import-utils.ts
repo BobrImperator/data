@@ -691,7 +691,15 @@ export function findEmberImportLocalName(
     }
 
     // Check if this is a relative import that points to a model file
-    if (fromFile && baseDir && (cleanSourceText.startsWith('./') || cleanSourceText.startsWith('../'))) {
+    // Skip relative fallback when checking only for fragment sources — isModelFile() is too broad
+    // and would false-positive on regular models. Fragment relative imports are handled by intermediateFragmentPaths.
+    const isFragmentOnlyCheck = expectedSources.length === 1 && expectedSources[0] === FRAGMENT_BASE_SOURCE;
+    if (
+      fromFile &&
+      baseDir &&
+      !isFragmentOnlyCheck &&
+      (cleanSourceText.startsWith('./') || cleanSourceText.startsWith('../'))
+    ) {
       const resolvedPath = resolveRelativeImport(cleanSourceText, fromFile);
       if (resolvedPath) {
         try {

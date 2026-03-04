@@ -2703,14 +2703,13 @@ exports[`migrate-to-schema batch operation > places intermediate model extension
 import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
 
 const RegularModelSchema = {
-  'type': 'fragment:regular-model',
+  'type': 'regular-model',
   'legacy': true,
-  'identity': null,
-  'fields': [],
-  'objectExtensions': [
-    'ember-object',
-    'fragment'
-  ]
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': []
 } satisfies LegacyResourceSchema;
 
 export default RegularModelSchema;
@@ -2853,14 +2852,13 @@ exports[`migrate-to-schema batch operation > processes intermediateModelPaths to
 import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
 
 const CustomSelectOptionSchema = {
-  'type': 'fragment:custom-select-option',
+  'type': 'custom-select-option',
   'legacy': true,
-  'identity': null,
-  'fields': [],
-  'objectExtensions': [
-    'ember-object',
-    'fragment'
-  ]
+  'identity': {
+    'kind': '@id',
+    'name': 'id'
+  },
+  'fields': []
 } satisfies LegacyResourceSchema;
 
 export default CustomSelectOptionSchema;
