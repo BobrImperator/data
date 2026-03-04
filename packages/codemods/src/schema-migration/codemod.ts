@@ -252,9 +252,7 @@ export class Codemod {
         }
 
         allArtifacts.push(...artifacts);
-        this.logger.info(
-          `Generated ${artifacts.length} artifacts from importSubstitute source '${substitute.import}'`
-        );
+        this.logger.info(`Generated ${artifacts.length} artifacts from importSubstitute source '${substitute.import}'`);
       }
     }
 

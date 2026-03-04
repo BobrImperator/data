@@ -7,6 +7,7 @@
  */
 
 import { parse, type SgNode } from '@ast-grep/napi';
+import { resolve } from 'path';
 
 import { logger } from '../../../utils/logger.js';
 import type { TransformOptions } from '../config.js';
@@ -731,6 +732,17 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
   const modelImportLocal = findEmberImportLocalName(root, modelSources, options, filePath, process.cwd());
   if (modelImportLocal) {
     return 'model';
+  }
+
+  // Check if the file is from an additionalModelSources directory
+  if (options.additionalModelSources) {
+    for (const source of options.additionalModelSources) {
+      const sourceDirResolved = resolve(source.dir.replace(/\*+$/, ''));
+      console.log('[detectFileType] additionalModelSources check:', { filePath, sourceDir: source.dir, sourceDirResolved });
+      if (filePath.startsWith(sourceDirResolved)) {
+        return 'model';
+      }
+    }
   }
 
   // Check for intermediate fragment paths (classes extending an intermediate fragment base class)
