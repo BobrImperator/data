@@ -1773,8 +1773,8 @@ exports[`migrate-to-schema batch operation > importSubstitutes sourcePath falls 
 {
   "resources/": "__dir__",
   "resources/simple.schema.ts": "
-import type { Type } from '@ember-data/core-types/symbols';
-import type { FallbackTraitTrait } from 'test-app/data/traits/fallback-trait.schema';
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
 const SimpleSchema = {
   'type': 'simple',
   'legacy': true,
@@ -1795,14 +1795,47 @@ const SimpleSchema = {
   'objectExtensions': [
     'fallback-ext'
   ]
-} as const;
+} satisfies LegacyResourceSchema;
 
 export default SimpleSchema;
+",
+  "resources/simple.type.ts": "
+import type { Type } from '@warp-drive/core-types/symbols';
+import type { WithLegacy } from '@ember-data/model/migration-support';
 
-export interface Simple extends FallbackTraitTrait {
+/**
+ * This type represents the full set schema derived fields of
+ * the 'simple' resource, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Simple} for fields + legacy mode features
+ */
+export interface SimpleResource extends FallbackTraitTrait {
   readonly [Type]: 'simple';
-  readonly title: string | null;
-}",
+  id: string | null;
+  title: string;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'simple' resource, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link SimpleResource} for fields + legacy mode features
+ */
+export interface Simple extends WithLegacy<SimpleResource> {}
+",
   "traits/": "__dir__",
 }
 `;
@@ -1811,8 +1844,8 @@ exports[`migrate-to-schema batch operation > importSubstitutes sourcePath with e
 {
   "resources/": "__dir__",
   "resources/simple.schema.ts": "
-import type { Type } from '@ember-data/core-types/symbols';
-import type { MyCustomTraitTrait } from 'test-app/data/traits/my-custom-trait.schema';
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
 const SimpleSchema = {
   'type': 'simple',
   'legacy': true,
@@ -1833,18 +1866,54 @@ const SimpleSchema = {
   'objectExtensions': [
     'my-custom-ext'
   ]
-} as const;
+} satisfies LegacyResourceSchema;
 
 export default SimpleSchema;
+",
+  "resources/simple.type.ts": "
+import type { Type } from '@warp-drive/core-types/symbols';
+import type { WithLegacy } from '@ember-data/model/migration-support';
 
-export interface Simple extends MyCustomTraitTrait {
+/**
+ * This type represents the full set schema derived fields of
+ * the 'simple' resource, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Simple} for fields + legacy mode features
+ */
+export interface SimpleResource extends MyCustomTraitTrait {
   readonly [Type]: 'simple';
-  readonly title: string | null;
-}",
+  id: string | null;
+  title: string;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'simple' resource, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link SimpleResource} for fields + legacy mode features
+ */
+export interface Simple extends WithLegacy<SimpleResource> {}
+",
   "traits/": "__dir__",
   "traits/base.schema.ts": "
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
 import type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private';
-const BaseSchema = {
+
+const BaseTraitSchema = {
   'fields': [
     {
       'kind': 'attribute',
@@ -1852,34 +1921,42 @@ const BaseSchema = {
       'type': 'string'
     }
   ]
-} as const;
+} satisfies LegacyResourceSchema;
 
-export default BaseSchema;
+export default BaseTraitSchema;
 
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Base} for fields + legacy mode features
+ */
 export interface BaseTrait {
   id: string | null;
-  readonly rawErrors: string | null;
-  readonly isNew: boolean;
-  readonly hasDirtyAttributes: boolean;
-  readonly isDeleted: boolean;
-  readonly isSaving: boolean;
-  readonly isValid: boolean;
-  readonly isError: boolean;
-  readonly isLoaded: boolean;
-  readonly isEmpty: boolean;
-  save: (options?: Record<string, unknown>) => Promise<this>;
-  reload: (options?: Record<string, unknown>) => Promise<this>;
-  deleteRecord: () => void;
-  unloadRecord: () => void;
-  destroyRecord: (options?: Record<string, unknown>) => Promise<void>;
-  rollbackAttributes: () => void;
-  belongsTo: (propertyName: string) => BelongsToReference;
-  hasMany: (propertyName: string) => HasManyReference;
-  serialize: (options?: Record<string, unknown>) => unknown;
-  readonly errors: Errors;
-  readonly adapterError: Error | null;
-  readonly isReloading: boolean;
-}",
+  rawErrors: string | null;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link BaseTrait} for fields + legacy mode features
+ */
+export interface Base extends WithLegacy<BaseTrait> {}
+",
 }
 `;
 
@@ -1887,6 +1964,7 @@ exports[`migrate-to-schema batch operation > importSubstitutes sourcePath with e
 [
   "resources/",
   "resources/simple.schema.ts",
+  "resources/simple.type.ts",
   "traits/",
   "traits/base.schema.ts",
 ]
@@ -1896,9 +1974,8 @@ exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath a
 {
   "resources/": "__dir__",
   "resources/allowed-role.schema.ts": "
-import type { Type } from '@ember-data/core-types/symbols';
-import type { PermissableTrait } from 'test-app/data/traits/permissable.schema';
-import type { BaseschemaTrait } from 'test-app/data/traits/BaseSchema.schema';
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
 const AllowedRoleSchema = {
   'type': 'allowed-role',
   'legacy': true,
@@ -1915,19 +1992,56 @@ const AllowedRoleSchema = {
   ],
   'traits': [
     'permissable',
-    'BaseSchema'
+    'BaseTraitSchema'
   ]
-} as const;
+} satisfies LegacyResourceSchema;
 
 export default AllowedRoleSchema;
+",
+  "resources/allowed-role.type.ts": "
+import type { Type } from '@warp-drive/core-types/symbols';
+import type { WithLegacy } from '@ember-data/model/migration-support';
 
-export interface AllowedRole extends PermissableTrait, BaseschemaTrait {
+/**
+ * This type represents the full set schema derived fields of
+ * the 'allowed-role' resource, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link AllowedRole} for fields + legacy mode features
+ */
+export interface AllowedRoleResource extends PermissableTrait, BasetraitschemaTrait {
   readonly [Type]: 'allowed-role';
-  readonly roleName: string | null;
-}",
+  id: string | null;
+  roleName: string;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'allowed-role' resource, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link AllowedRoleResource} for fields + legacy mode features
+ */
+export interface AllowedRole extends WithLegacy<AllowedRoleResource> {}
+",
   "traits/": "__dir__",
-  "traits/base.schema.js": "
-const BaseSchema = {
+  "traits/base.schema.ts": "
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
+import type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private';
+
+const BaseTraitSchema = {
   'fields': [
     {
       'kind': 'attribute',
@@ -1935,11 +2049,46 @@ const BaseSchema = {
       'type': 'string'
     }
   ]
-};
+} satisfies LegacyResourceSchema;
 
-export default BaseSchema;",
+export default BaseTraitSchema;
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Base} for fields + legacy mode features
+ */
+export interface BaseTrait {
+  id: string | null;
+  rawErrors: string | null;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link BaseTrait} for fields + legacy mode features
+ */
+export interface Base extends WithLegacy<BaseTrait> {}
+",
   "traits/permissable.schema.js": "
-const PermissableSchema = {
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
+const PermissableTraitSchema = {
   'name': 'permissable',
   'mode': 'legacy',
   'fields': [
@@ -1949,9 +2098,41 @@ const PermissableSchema = {
       'type': 'object'
     }
   ]
-};
+} satisfies LegacyResourceSchema;
 
-export default PermissableSchema;",
+export default PermissableTraitSchema;
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'permissable' trait, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Permissable} for fields + legacy mode features
+ */
+export interface PermissableTrait {
+  permissions?: unknown;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'permissable' trait, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link PermissableTrait} for fields + legacy mode features
+ */
+export interface Permissable extends WithLegacy<PermissableTrait> {}
+",
 }
 `;
 
@@ -1959,8 +2140,9 @@ exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath a
 [
   "resources/",
   "resources/allowed-role.schema.ts",
+  "resources/allowed-role.type.ts",
   "traits/",
-  "traits/base.schema.js",
+  "traits/base.schema.ts",
   "traits/permissable.schema.js",
 ]
 `;
@@ -1969,8 +2151,8 @@ exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath a
 {
   "resources/": "__dir__",
   "resources/brand-identity.schema.ts": "
-import type { Type } from '@ember-data/core-types/symbols';
-import type { BaseschemaTrait } from 'test-app/data/traits/BaseSchema.schema';
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
 const BrandIdentitySchema = {
   'type': 'brand-identity',
   'legacy': true,
@@ -1986,19 +2168,56 @@ const BrandIdentitySchema = {
     }
   ],
   'traits': [
-    'BaseSchema'
+    'BaseTraitSchema'
   ]
-} as const;
+} satisfies LegacyResourceSchema;
 
 export default BrandIdentitySchema;
+",
+  "resources/brand-identity.type.ts": "
+import type { Type } from '@warp-drive/core-types/symbols';
+import type { WithLegacy } from '@ember-data/model/migration-support';
 
-export interface BrandIdentity extends BaseschemaTrait {
+/**
+ * This type represents the full set schema derived fields of
+ * the 'brand-identity' resource, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link BrandIdentity} for fields + legacy mode features
+ */
+export interface BrandIdentityResource extends BasetraitschemaTrait {
   readonly [Type]: 'brand-identity';
-  readonly name: string | null;
-}",
+  id: string | null;
+  name: string;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'brand-identity' resource, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link BrandIdentityResource} for fields + legacy mode features
+ */
+export interface BrandIdentity extends WithLegacy<BrandIdentityResource> {}
+",
   "traits/": "__dir__",
-  "traits/base.schema.js": "
-const BaseSchema = {
+  "traits/base.schema.ts": "
+import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
+
+import type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private';
+
+const BaseTraitSchema = {
   'fields': [
     {
       'kind': 'attribute',
@@ -2006,9 +2225,42 @@ const BaseSchema = {
       'type': 'string'
     }
   ]
-};
+} satisfies LegacyResourceSchema;
 
-export default BaseSchema;",
+export default BaseTraitSchema;
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, without any of the legacy mode features
+ * and without any extensions.
+ *
+ * > [!TIP]
+ * > It is likely that you will want a more specific type tailored
+ * > to the context of where some data has been loaded, for instance
+ * > one that marks specific fields as readonly, or which only enables
+ * > some fields to be null during create, or which only includes
+ * > a subset of fields based on a specific API response.
+ * >
+ * > For those cases, you can create a more specific type that derives
+ * > from this type to ensure that your type definitions stay consistent
+ * > with the schema. For more details read about {@link https://warp-drive.io/api/@warp-drive/core/types/record/type-aliases/Mask | Masking}
+ *
+ * See also {@link Base} for fields + legacy mode features
+ */
+export interface BaseTrait {
+  id: string | null;
+  rawErrors: string | null;
+}
+
+/**
+ * This type represents the full set schema derived fields of
+ * the 'base' trait, including all legacy mode features but
+ * without any extensions.
+ *
+ * See also {@link BaseTrait} for fields + legacy mode features
+ */
+export interface Base extends WithLegacy<BaseTrait> {}
+",
 }
 `;
 
@@ -2016,8 +2268,9 @@ exports[`migrate-to-schema batch operation > importSubstitutes with sourcePath a
 [
   "resources/",
   "resources/brand-identity.schema.ts",
+  "resources/brand-identity.type.ts",
   "traits/",
-  "traits/base.schema.js",
+  "traits/base.schema.ts",
 ]
 `;
 

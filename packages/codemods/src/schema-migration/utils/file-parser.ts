@@ -35,11 +35,10 @@ import {
   NODE_KIND_PROPERTY_IDENTIFIER,
 } from './code-processing.js';
 import {
-  DEFAULT_EMBER_DATA_SOURCE,
   DEFAULT_MIXIN_SOURCE,
   FRAGMENT_BASE_SOURCE,
-  WARP_DRIVE_MODEL,
   findEmberImportLocalName,
+  getModelImportSources,
 } from './import-utils.js';
 import {
   extractBaseName,
@@ -175,12 +174,7 @@ const FIELD_DEFINITION_NODE_TYPES = [
 // ============================================================================
 
 function classifyImport(importPath: string, options: TransformOptions): ParsedFileImport['type'] {
-  const emberDataSources = [
-    options.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE,
-    'ember-data-model-fragments/attributes',
-    FRAGMENT_BASE_SOURCE,
-    WARP_DRIVE_MODEL,
-  ];
+  const emberDataSources = getModelImportSources(options);
 
   if (emberDataSources.some((src) => importPath.startsWith(src))) {
     return 'ember-data';
@@ -407,12 +401,7 @@ function extractModelData(root: SgNode, filePath: string, options: TransformOpti
   }
 
   // Get EmberData imports to identify decorators
-  const emberDataSources = [
-    options.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE,
-    'ember-data-model-fragments/attributes',
-    FRAGMENT_BASE_SOURCE,
-    WARP_DRIVE_MODEL,
-  ];
+  const emberDataSources = getModelImportSources(options);
   const emberDataImports = getEmberDataImports(root, emberDataSources, options);
 
   // Get class body
@@ -583,11 +572,7 @@ function extractMixinData(root: SgNode, filePath: string, options: TransformOpti
     return { fields, behaviors, traits };
   }
 
-  const emberDataSources = [
-    options.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE,
-    'ember-data-model-fragments/attributes',
-    WARP_DRIVE_MODEL,
-  ];
+  const emberDataSources = getModelImportSources(options);
   const emberDataImports = getEmberDataImports(root, emberDataSources, options);
   const mixinCreateCalls = findMixinCreateCalls(root, mixinImportLocal);
 
@@ -741,11 +726,7 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
   }
 
   // Check for model
-  const modelSources = [
-    options.emberDataImportSource || DEFAULT_EMBER_DATA_SOURCE,
-    ...(options.importSubstitutes?.map((s) => s.import) ?? []),
-    WARP_DRIVE_MODEL,
-  ].filter(Boolean);
+  const modelSources = getModelImportSources(options);
 
   const modelImportLocal = findEmberImportLocalName(root, modelSources, options, filePath, process.cwd());
   if (modelImportLocal) {
