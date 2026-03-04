@@ -730,6 +730,7 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
   const modelSources = getModelImportSources(options);
 
   const modelImportLocal = findEmberImportLocalName(root, modelSources, options, filePath, process.cwd());
+  console.log('[detectFileType]', { filePath, modelImportLocal, modelSources });
   if (modelImportLocal) {
     return 'model';
   }
@@ -738,7 +739,6 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
   if (options.additionalModelSources) {
     for (const source of options.additionalModelSources) {
       const sourceDirResolved = resolve(source.dir.replace(/\*+$/, ''));
-      console.log('[detectFileType] additionalModelSources check:', { filePath, sourceDir: source.dir, sourceDirResolved });
       if (filePath.startsWith(sourceDirResolved)) {
         return 'model';
       }
