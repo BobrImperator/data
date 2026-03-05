@@ -54,7 +54,6 @@ import {
   pascalToKebab,
   removeFileExtension,
   toKebabCase,
-  TRAILING_MODEL_SUFFIX_REGEX,
 } from '../utils/string.js';
 
 /**
@@ -242,18 +241,8 @@ function extractHeritageInfo(
     const mixinExts = extractMixinExtensions(filePath, options);
     mixinExtensions.push(...mixinExts);
 
-    let matchedIntermediatePaths: string[] = [];
-    if (options?.intermediateModelPaths && options.intermediateModelPaths.length > 0) {
-      const result = extractIntermediateModelTraits(heritageClause, root, options.intermediateModelPaths, options);
-      mixinTraits.push(...result.traits);
-      matchedIntermediatePaths = result.matchedPaths;
-    }
-
     if (options?.importSubstitutes) {
       for (const substitute of options.importSubstitutes) {
-        if (matchedIntermediatePaths.includes(substitute.import)) {
-          continue;
-        }
         const localName = findEmberImportLocalName(root, [substitute.import], options, undefined, process.cwd());
         if (localName && heritageClause.text().includes(localName)) {
           if (substitute.trait) {
@@ -273,7 +262,7 @@ function extractHeritageInfo(
 /**
  * Resolve import path using additionalModelSources and additionalMixinSources patterns
  */
-function resolveIntermediateImportPath(
+export function resolveIntermediateImportPath(
   importPath: string,
   additionalModelSources: Array<{ pattern: string; dir: string }> | undefined,
   additionalMixinSources: Array<{ pattern: string; dir: string }> | undefined
@@ -815,20 +804,22 @@ export function generateIntermediateModelTraitArtifacts(
  */
 function getIntermediateModelLocalNames(
   root: SgNode,
-  intermediateModelPaths: string[],
   options?: TransformOptions,
   fromFile?: string
 ): string[] {
   const localNames: string[] = [];
-  const substitutePaths = options?.importSubstitutes?.map((s) => s.import).filter(Boolean) ?? [];
+  const intermediateModelPaths = [
+    ...(options?.importSubstitutes?.map((s) => s.import) ?? []),
+    ...(options?.intermediateModelPaths ?? []),
+  ];
 
-  for (const modelPath of [...intermediateModelPaths, ...substitutePaths]) {
+  for (const modelPath of intermediateModelPaths) {
     // First try direct matching
     let localName = findEmberImportLocalName(root, [modelPath], options, fromFile, process.cwd());
 
     // If no direct match, try to find imports that resolve to the expected intermediate model
     // This handles cases where the configured path doesn't match the actual import path
-    if (!localName && fromFile && (intermediateModelPaths.includes(modelPath) || substitutePaths.includes(modelPath))) {
+    if (!localName && fromFile && intermediateModelPaths.includes(modelPath)) {
       const importStatements = root.findAll({ rule: { kind: NODE_KIND_IMPORT_STATEMENT } });
 
       for (const importNode of importStatements) {
@@ -1131,13 +1122,9 @@ function isModelClass(
 
   // Check for chained extends through configured intermediate classes
   let isChainedExtension = false;
-  if (options?.intermediateModelPaths && options.intermediateModelPaths.length > 0) {
-    const intermediateLocalNames = getIntermediateModelLocalNames(
-      root,
-      options.intermediateModelPaths,
-      options,
-      filePath
-    );
+  if ((options?.importSubstitutes && options.importSubstitutes.length > 0) ||
+      (options?.intermediateModelPaths && options.intermediateModelPaths.length > 0)) {
+    const intermediateLocalNames = getIntermediateModelLocalNames(root, options, filePath);
     isChainedExtension = intermediateLocalNames.some((localName) => extendsText.includes(localName));
     if (isChainedExtension) {
       log.debug(
@@ -1153,47 +1140,6 @@ function isModelClass(
   return isDirectExtension || isBaseModelExtension || isChainedExtension;
 }
 
-/**
- * Extract intermediate model names from heritage clause and convert to trait names
- */
-function extractIntermediateModelTraits(
-  heritageClause: SgNode,
-  root: SgNode,
-  intermediateModelPaths: string[],
-  options?: TransformOptions
-): { traits: string[]; matchedPaths: string[] } {
-  const intermediateTraits: string[] = [];
-  const matchedPaths: string[] = [];
-  const extendsText = heritageClause.text();
-
-  // Get local names for all intermediate models
-  const intermediateLocalNames = getIntermediateModelLocalNames(root, intermediateModelPaths, options);
-
-  for (const localName of intermediateLocalNames) {
-    if (extendsText.includes(localName)) {
-      // Convert the import path to a trait name
-      const modelPath = intermediateModelPaths.find((path) => {
-        const pathLocalName = findEmberImportLocalName(root, [path], options, undefined, process.cwd());
-        return pathLocalName === localName;
-      });
-
-      if (modelPath) {
-        // Convert path like "my-app/core/data-field-model" to "data-field-model"
-        let traitName = modelPath.split('/').pop() || modelPath;
-        // Strip any file extension (.js, .ts)
-        traitName = removeFileExtension(traitName);
-        const dasherizedName = pascalToKebab(traitName).replace(TRAILING_MODEL_SUFFIX_REGEX, ''); // Remove trailing -model or model
-
-        intermediateTraits.push(dasherizedName);
-        matchedPaths.push(modelPath);
-        log.debug(`DEBUG: Found intermediate model trait: ${dasherizedName} from ${modelPath}`);
-      }
-      break; // Only process the first match since a class can only extend one parent
-    }
-  }
-
-  return { traits: intermediateTraits, matchedPaths };
-}
 
 /**
  * Check if an import path represents a local mixin (not an external dependency)
@@ -1268,8 +1214,12 @@ function extractMixinTraits(
         log.debug(`Found mixin identifier: ${mixinName}`);
 
         // Check if this is an intermediate model import - if so, skip it as it's handled elsewhere
-        if (options?.intermediateModelPaths) {
-          const isIntermediateModel = options.intermediateModelPaths.some((path) => {
+        const allSubstitutePaths = [
+          ...(options?.importSubstitutes?.map((s) => s.import) ?? []),
+          ...(options?.intermediateModelPaths ?? []),
+        ];
+        if (allSubstitutePaths.length > 0) {
+          const isIntermediateModel = allSubstitutePaths.some((path) => {
             const localName = findEmberImportLocalName(root, [path], options, undefined, process.cwd());
             return localName === mixinName;
           });

@@ -1334,6 +1334,64 @@ export default class Simple extends BaseModel {
     `);
   });
 
+  it('importSubstitutes pointing to intermediateModelPaths base class', async () => {
+    prepareFiles(tempDir, {
+      'app/core/-base-model.js': `
+import Model from '@ember-data/model';
+
+export default class BaseModel extends Model {}
+`,
+      'app/models/approval-request.ts': `
+import BaseModel from 'test-app/core/-base-model';
+import { attr, belongsTo } from '@ember-data/model';
+import BaseModelMixin from '../mixins/base-model';
+
+export default class ApprovalRequest extends BaseModel.extend(BaseModelMixin) {
+  @attr('string') declare name: string;
+  @attr('number') declare status: number;
+  @belongsTo('user', { async: false, inverse: null }) declare createdBy: unknown;
+}
+`,
+      'app/mixins/base-model.js': `
+import Mixin from '@ember/object/mixin';
+
+export default Mixin.create({});
+`,
+    });
+
+    const testOptions: MigrateOptions = {
+      ...options,
+      intermediateModelPaths: ['test-app/core/-base-model'],
+      importSubstitutes: [
+        {
+          import: 'test-app/core/-base-model',
+          trait: 'base-model-trait',
+          extension: 'base-model-extension',
+          sourcePath: join(tempDir, 'app/core/-base-model.js'),
+        },
+      ],
+      additionalModelSources: [
+        {
+          pattern: 'test-app/core/',
+          dir: join(tempDir, 'app/core/'),
+        },
+      ],
+    };
+
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await runMigration(testOptions);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    const dataDir = join(tempDir, 'app/data');
+    expect(collectFileStructure(dataDir)).toMatchSnapshot('importSubstitutes as intermediateModelPaths structure');
+    expect(collectFilesSnapshot(dataDir)).toMatchSnapshot('importSubstitutes as intermediateModelPaths files');
+  });
+
   describe('combineSchemasAndTypes=true', () => {
     it('generates combined artifacts with mixins, belongsTo, hasMany, and extensions', async () => {
       prepareFiles(tempDir, {

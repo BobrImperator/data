@@ -7,7 +7,7 @@ import { Codemod } from '../codemod.js';
 import { DEFAULT_RESOURCES_DIR, DEFAULT_TRAITS_DIR } from '../config.js';
 import type { FinalOptions, MigrateOptions, TransformOptions } from '../config.js';
 import { toArtifacts as mixinToArtifacts } from '../processors/mixin.js';
-import { processIntermediateModelsToTraits, toArtifacts as modelToArtifacts } from '../processors/model.js';
+import { toArtifacts as modelToArtifacts } from '../processors/model.js';
 import type { SchemaArtifact } from '../utils/artifact.js';
 
 const migrateLog = logger.for('migrate');
@@ -347,6 +347,17 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
     ...options,
   };
 
+  // Merge intermediateModelPaths into importSubstitutes so there's a single pipeline
+  if (finalOptions.intermediateModelPaths?.length) {
+    const substitutes = finalOptions.importSubstitutes ?? [];
+    for (const path of finalOptions.intermediateModelPaths) {
+      if (!substitutes.some((s) => s.import === path)) {
+        substitutes.push({ import: path });
+      }
+    }
+    finalOptions.importSubstitutes = substitutes;
+  }
+
   const log = logger.for('migrate-to-schema');
   log.info(`🚀 Starting schema migration...`);
   log.info(`📁 Input directory: ${resolve(finalOptions.inputDir || './app')}`);
@@ -389,36 +400,6 @@ export async function runMigration(options: MigrateOptions): Promise<void> {
   log.warn(`📋 Errors found while reading files: ${codemod.input.errors.length}`);
 
   finalOptions.entityRegistry = codemod.entityRegistry;
-
-  // Process intermediate models to generate trait artifacts first
-  // This must be done before processing regular models that extend these intermediate models
-  if (finalOptions.intermediateModelPaths && finalOptions.intermediateModelPaths.length > 0) {
-    try {
-      log.info(`🔄 Processing ${finalOptions.intermediateModelPaths.length} intermediate models...`);
-      const intermediateResults = processIntermediateModelsToTraits(
-        Array.isArray(finalOptions.intermediateModelPaths)
-          ? finalOptions.intermediateModelPaths
-          : [finalOptions.intermediateModelPaths],
-        finalOptions.additionalModelSources,
-        finalOptions.additionalMixinSources,
-        finalOptions
-      );
-
-      // Write intermediate model trait artifacts
-      writeIntermediateArtifacts(intermediateResults.artifacts, finalOptions, log);
-
-      if (intermediateResults.errors.length > 0) {
-        log.error(`⚠️ Errors processing intermediate models:`);
-        for (const error of intermediateResults.errors) {
-          log.error(`   ${String(error)}`);
-        }
-      }
-
-      log.info(`✅ Processed ${intermediateResults.artifacts.length} intermediate model artifacts`);
-    } catch (error) {
-      log.error(`❌ Error processing intermediate models: ${String(error)}`);
-    }
-  }
 
   if (substituteArtifacts.length > 0) {
     writeIntermediateArtifacts(substituteArtifacts, finalOptions, log);

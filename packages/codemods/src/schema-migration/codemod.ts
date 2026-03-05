@@ -6,7 +6,10 @@ import { basename, extname, join, resolve } from 'path';
 import type { InstanciatedLogger } from '../../utils/logger.js';
 import type { FinalOptions } from './config.js';
 import { analyzeModelMixinUsage } from './processors/mixin-analyzer.js';
-import { generateIntermediateModelTraitArtifacts } from './processors/model.js';
+import {
+  generateIntermediateModelTraitArtifacts,
+  resolveIntermediateImportPath,
+} from './processors/model.js';
 import type { SchemaArtifactRegistry } from './utils/artifact.js';
 import { buildEntityRegistry, linkEntities } from './utils/artifact.js';
 import type { TransformArtifact } from './utils/ast-utils.js';
@@ -41,19 +44,20 @@ export interface TransformerResult {
 
 /**
  * Check if a file path matches any intermediate model path
+ * Uses importSubstitutes (which includes merged intermediateModelPaths)
  */
 function isIntermediateModel(
   filePath: string,
-  intermediateModelPaths?: string[],
+  importSubstitutes?: Array<{ import: string; extension?: string; trait?: string; sourcePath?: string }>,
   additionalModelSources?: Array<{ pattern: string; dir: string }>
 ): boolean {
-  if (!intermediateModelPaths) return false;
+  if (!importSubstitutes || importSubstitutes.length === 0) return false;
 
   const fileBaseName = basename(filePath, extname(filePath));
 
-  for (const intermediatePath of intermediateModelPaths) {
+  for (const substitute of importSubstitutes) {
     // Handle paths with extensions (e.g., "my-app/core/base-model.js")
-    const intermediateBaseName = basename(intermediatePath, extname(intermediatePath));
+    const intermediateBaseName = basename(substitute.import, extname(substitute.import));
 
     if (fileBaseName === intermediateBaseName) {
       // Check if file is from a matching additional source
@@ -211,49 +215,128 @@ export class Codemod {
 
     const allArtifacts: TransformArtifact[] = [];
 
-    for (const substitute of substitutes) {
-      if (!substitute.sourcePath) continue;
+    const needsResolution: typeof substitutes = [];
 
+    for (const substitute of substitutes) {
       let filePath: string | null = null;
       let source: string | null = null;
 
-      const candidates = [substitute.sourcePath, `${substitute.sourcePath}.ts`, `${substitute.sourcePath}.js`];
-      for (const candidate of candidates) {
-        if (existsSync(candidate)) {
+      if (substitute.sourcePath) {
+        // Resolve via explicit sourcePath
+        const candidates = [substitute.sourcePath, `${substitute.sourcePath}.ts`, `${substitute.sourcePath}.js`];
+        for (const candidate of candidates) {
+          if (existsSync(candidate)) {
+            try {
+              filePath = candidate;
+              source = readFileSync(candidate, 'utf-8');
+              break;
+            } catch {
+              // continue trying next candidate
+            }
+          }
+        }
+        if (!filePath || !source) {
+          this.logger.warn(
+            `Could not find source file for importSubstitute '${substitute.import}' at '${substitute.sourcePath}', falling back to static config`
+          );
+          continue;
+        }
+      } else {
+        // Resolve via additionalModelSources/additionalMixinSources patterns
+        const resolvedPath = resolveIntermediateImportPath(
+          substitute.import,
+          this.finalOptions.additionalModelSources,
+          this.finalOptions.additionalMixinSources
+        );
+        const possiblePaths = [`${resolvedPath}.ts`, `${resolvedPath}.js`];
+        for (const possiblePath of possiblePaths) {
           try {
-            filePath = candidate;
-            source = readFileSync(candidate, 'utf-8');
-            break;
+            if (existsSync(possiblePath)) {
+              filePath = possiblePath;
+              source = readFileSync(possiblePath, 'utf-8');
+              break;
+            }
           } catch {
             // continue trying next candidate
           }
         }
-      }
-
-      if (!filePath || !source) {
-        this.logger.warn(
-          `Could not find source file for importSubstitute '${substitute.import}' at '${substitute.sourcePath}', falling back to static config`
-        );
-        continue;
+        if (!filePath || !source) {
+          this.logger.warn(`Could not find file for import substitute: ${substitute.import}`);
+          continue;
+        }
       }
 
       this.resolvedSubstituteSourcePaths.add(filePath);
+      needsResolution.push(substitute);
+    }
 
-      const artifacts = generateIntermediateModelTraitArtifacts(filePath, source, substitute.import, this.finalOptions);
+    // Build dependency map for topological ordering
+    const modelInfoMap = new Map<
+      string,
+      { substitute: (typeof substitutes)[0]; filePath: string; source: string; dependencies: string[]; processed: boolean }
+    >();
 
-      if (artifacts.length > 0) {
-        const traitArtifact = artifacts.find((a) => a.type === 'trait');
-        if (traitArtifact && !substitute.trait) {
-          substitute.trait = traitArtifact.name;
+    for (const substitute of needsResolution) {
+      const filePath = [...this.resolvedSubstituteSourcePaths].find((p) => {
+        const resolvedPath = resolveIntermediateImportPath(
+          substitute.import,
+          this.finalOptions.additionalModelSources,
+          this.finalOptions.additionalMixinSources
+        );
+        return p.startsWith(resolvedPath) || (substitute.sourcePath && p.startsWith(substitute.sourcePath));
+      });
+      if (!filePath) continue;
+
+      const source = readFileSync(filePath, 'utf-8');
+      const dependencies: string[] = [];
+      for (const other of needsResolution) {
+        if (other.import !== substitute.import && source.includes(`from '${other.import}'`)) {
+          dependencies.push(other.import);
         }
-        const extensionArtifact = artifacts.find((a) => a.type === 'trait-extension');
-        if (extensionArtifact && !substitute.extension) {
-          substitute.extension = extensionArtifact.name;
-        }
-
-        allArtifacts.push(...artifacts);
-        this.logger.info(`Generated ${artifacts.length} artifacts from importSubstitute source '${substitute.import}'`);
       }
+
+      modelInfoMap.set(substitute.import, { substitute, filePath, source, dependencies, processed: false });
+    }
+
+    // Process in dependency order (topological sort)
+    const processEntry = (importPath: string): void => {
+      const info = modelInfoMap.get(importPath);
+      if (!info || info.processed) return;
+
+      for (const dep of info.dependencies) {
+        processEntry(dep);
+      }
+
+      try {
+        const artifacts = generateIntermediateModelTraitArtifacts(
+          info.filePath,
+          info.source,
+          importPath,
+          this.finalOptions
+        );
+
+        if (artifacts.length > 0) {
+          const traitArtifact = artifacts.find((a) => a.type === 'trait');
+          if (traitArtifact && !info.substitute.trait) {
+            info.substitute.trait = traitArtifact.baseName;
+          }
+          const extensionArtifact = artifacts.find((a) => a.type === 'trait-extension');
+          if (extensionArtifact && !info.substitute.extension) {
+            info.substitute.extension = extensionArtifact.baseName;
+          }
+
+          allArtifacts.push(...artifacts);
+          this.logger.info(`Generated ${artifacts.length} artifacts from importSubstitute source '${importPath}'`);
+        }
+      } catch (error) {
+        this.logger.error(`Error resolving import substitute ${importPath}: ${String(error)}`);
+      }
+
+      info.processed = true;
+    };
+
+    for (const importPath of modelInfoMap.keys()) {
+      processEntry(importPath);
     }
 
     return allArtifacts;
@@ -281,7 +364,7 @@ export class Codemod {
         if (!existsSync(file)) return 'file-not-found';
         if (this.finalOptions.skipProcessed && isAlreadyProcessed(file)) return 'already-processed';
         if (
-          isIntermediateModel(file, this.finalOptions.intermediateModelPaths, this.finalOptions.additionalModelSources)
+          isIntermediateModel(file, this.finalOptions.importSubstitutes, this.finalOptions.additionalModelSources)
         )
           return 'intermediate-model';
         if (this.resolvedSubstituteSourcePaths.has(file)) return 'already-processed';

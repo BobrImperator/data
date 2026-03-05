@@ -127,33 +127,29 @@ function shouldImportFromTraits(relatedType: string, options?: TransformOptions)
     }
   }
 
-  // Check if any of the intermediate models correspond to this related type
-  const intermediateModelPaths = options?.intermediateModelPaths;
-  if (intermediateModelPaths) {
-    for (const modelPath of intermediateModelPaths) {
-      // Extract the trait name from the model path using the same logic as generateIntermediateModelTraitArtifacts
-      // e.g., "my-app/core/data-field-model" -> "data-field"
-      const traitBaseName =
-        modelPath
-          .split('/')
-          .pop()
-          ?.replace(/-?model$/i, '') || modelPath;
-      const traitName = traitBaseName
-        .replace(UPPERCASE_LETTER_REGEX, '-$1')
-        .toLowerCase()
-        .replace(LEADING_HYPHEN_REGEX, '');
-
-      if (traitName === relatedType) {
-        return true;
-      }
+  // Check importSubstitutes and intermediateModelPaths (the latter for backward compat with direct callers)
+  const intermediatePaths = [
+    ...(options?.importSubstitutes?.map((s) => s.import) ?? []),
+    ...(options?.intermediateModelPaths ?? []),
+  ];
+  for (const sub of options?.importSubstitutes ?? []) {
+    if (sub.trait === relatedType) {
+      return true;
     }
   }
+  for (const modelPath of intermediatePaths) {
+    const traitBaseName =
+      modelPath
+        .split('/')
+        .pop()
+        ?.replace(/-?model$/i, '') || modelPath;
+    const traitName = traitBaseName
+      .replace(UPPERCASE_LETTER_REGEX, '-$1')
+      .toLowerCase()
+      .replace(LEADING_HYPHEN_REGEX, '');
 
-  if (options?.importSubstitutes) {
-    for (const sub of options.importSubstitutes) {
-      if (sub.sourcePath && sub.trait === relatedType) {
-        return true;
-      }
+    if (traitName === relatedType) {
+      return true;
     }
   }
 
@@ -492,9 +488,13 @@ export function isModelFile(filePath: string, source: string, options?: Transfor
   try {
     // Special case: if this file itself is listed as an intermediate model or fragment, it's a model by definition
     // Match the trailing path segments (e.g. "core/base-model" matches "/app/core/base-model.js")
-    if (options?.intermediateModelPaths) {
+    const allIntermediateModelPaths = [
+      ...(options?.importSubstitutes?.map((s) => s.import) ?? []),
+      ...(options?.intermediateModelPaths ?? []),
+    ];
+    if (allIntermediateModelPaths.length > 0) {
       const filePathWithoutExt = filePath.replace(FILE_EXTENSION_REGEX, '');
-      for (const intermediatePath of options.intermediateModelPaths) {
+      for (const intermediatePath of allIntermediateModelPaths) {
         const pathSuffix = intermediatePath.split('/').slice(-2).join('/'); // e.g., "core/base-model"
         if (filePathWithoutExt.endsWith(pathSuffix)) {
           return true;
@@ -581,18 +581,23 @@ export function isModelFile(filePath: string, source: string, options?: Transfor
       if (
         !isBaseModelImport &&
         sourceText.startsWith('.') &&
-        (options?.intermediateModelPaths || options?.intermediateFragmentPaths)
+        (options?.importSubstitutes || options?.intermediateModelPaths || options?.intermediateFragmentPaths)
       ) {
         try {
           // Resolve relative path to absolute path
           const resolvedPath = resolve(dirname(filePath), sourceText);
           log.debug(`Checking relative import ${sourceText} -> ${resolvedPath}`);
 
+          const allModelPaths = [
+            ...(options.importSubstitutes?.map((s) => s.import) ?? []),
+            ...(options.intermediateModelPaths ?? []),
+          ];
+
           // Check if this resolved path corresponds to any intermediate model or fragment
           if (
             matchesIntermediatePath(
               resolvedPath,
-              options.intermediateModelPaths,
+              allModelPaths.length > 0 ? allModelPaths : undefined,
               options.additionalModelSources,
               options
             ) ||
