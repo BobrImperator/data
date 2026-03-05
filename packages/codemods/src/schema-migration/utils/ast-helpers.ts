@@ -27,19 +27,15 @@ function findExportStatements(root: SgNode, options?: TransformOptions) {
  * Find the default export statement in an AST
  */
 export function findDefaultExport(root: SgNode, options?: TransformOptions): SgNode | null {
-  const exportStatements = findExportStatements(root, options);
+  const result = root.find({
+    rule: {
+      kind: 'export_statement',
+      has: { regex: '^default$', stopBy: 'neighbor' },
+    },
+  });
 
-  for (const exportStatement of exportStatements) {
-    const exportText = exportStatement.text();
-    if (exportText.startsWith('export default')) {
-      log.debug('Found default export');
-      return exportStatement;
-    }
-  }
-
-  log.debug('No default export found');
-
-  return null;
+  log.debug(result ? 'Found default export' : 'No default export found');
+  return result;
 }
 
 /**

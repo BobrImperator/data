@@ -371,9 +371,10 @@ function extractModelData(root: SgNode, filePath: string, options: TransformOpti
     return { fields, behaviors, traits, heritageLocalNames, baseClass, comment };
   }
 
-  // there must be a defaultExport if we found a class declaration
   const defaultExport = findDefaultExport(root, options);
-  comment = extractLeadingComment(defaultExport!);
+  if (defaultExport) {
+    comment = extractLeadingComment(defaultExport);
+  }
 
   // Extract base class and traits from heritage clause
   const heritageClause = classDeclaration.find({ rule: { kind: NODE_KIND_CLASS_HERITAGE } });
@@ -731,6 +732,12 @@ function detectFileType(root: SgNode, filePath: string, options: TransformOption
 
   const modelImportLocal = findEmberImportLocalName(root, modelSources, options, filePath, process.cwd());
   if (modelImportLocal) {
+    return 'model';
+  }
+
+  // Check if the file has named decorator imports from model sources (e.g. `import { attr } from '...'` without a default import)
+  const emberDataImports = getEmberDataImports(root, modelSources, options);
+  if (emberDataImports.size > 0) {
     return 'model';
   }
 

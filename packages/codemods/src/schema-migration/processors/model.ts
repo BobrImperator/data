@@ -253,7 +253,11 @@ function extractHeritageInfo(
     }
 
     if (options?.importSubstitutes) {
+      const intermediateModelPaths = options.intermediateModelPaths ?? [];
       for (const substitute of options.importSubstitutes) {
+        if (intermediateModelPaths.includes(substitute.import)) {
+          continue;
+        }
         const localName = findEmberImportLocalName(root, [substitute.import], options, undefined, process.cwd());
         if (localName && heritageClause.text().includes(localName)) {
           if (substitute.trait) {
@@ -820,14 +824,15 @@ function getIntermediateModelLocalNames(
   fromFile?: string
 ): string[] {
   const localNames: string[] = [];
+  const substitutePaths = options?.importSubstitutes?.map((s) => s.import).filter(Boolean) ?? [];
 
-  for (const modelPath of intermediateModelPaths) {
+  for (const modelPath of [...intermediateModelPaths, ...substitutePaths]) {
     // First try direct matching
     let localName = findEmberImportLocalName(root, [modelPath], options, fromFile, process.cwd());
 
     // If no direct match, try to find imports that resolve to the expected intermediate model
     // This handles cases where the configured path doesn't match the actual import path
-    if (!localName && fromFile && options?.intermediateModelPaths?.includes(modelPath)) {
+    if (!localName && fromFile && (intermediateModelPaths.includes(modelPath) || substitutePaths.includes(modelPath))) {
       const importStatements = root.findAll({ rule: { kind: NODE_KIND_IMPORT_STATEMENT } });
 
       for (const importNode of importStatements) {
@@ -855,24 +860,13 @@ function getIntermediateModelLocalNames(
               if (existsSync(possiblePath)) {
                 // Check if this resolved path matches the expected intermediate model
                 if (possiblePath.includes(expectedFilePath)) {
-                  try {
-                    const content = readFileSync(possiblePath, 'utf8');
-                    // Verify it's actually a model file
-                    const isModel = isModelFile(possiblePath, content, options);
-                    if (isModel) {
-                      const importClause = importNode
-                        .children()
-                        .find((child) => child.kind() === NODE_KIND_IMPORT_CLAUSE);
-                      if (importClause) {
-                        const identifiers = importClause.findAll({ rule: { kind: NODE_KIND_IDENTIFIER } });
-                        if (identifiers.length > 0) {
-                          localName = identifiers[0].text();
-                          break;
-                        }
-                      }
+                  const importClause = importNode.children().find((child) => child.kind() === NODE_KIND_IMPORT_CLAUSE);
+                  if (importClause) {
+                    const identifiers = importClause.findAll({ rule: { kind: NODE_KIND_IDENTIFIER } });
+                    if (identifiers.length > 0) {
+                      localName = identifiers[0].text();
+                      break;
                     }
-                  } catch {
-                    // Continue checking other possibilities
                   }
                 }
                 break;

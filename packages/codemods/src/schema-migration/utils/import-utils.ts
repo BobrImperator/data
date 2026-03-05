@@ -491,18 +491,21 @@ function matchesIntermediatePath(
 export function isModelFile(filePath: string, source: string, options?: TransformOptions): boolean {
   try {
     // Special case: if this file itself is listed as an intermediate model or fragment, it's a model by definition
+    // Match the trailing path segments (e.g. "core/base-model" matches "/app/core/base-model.js")
     if (options?.intermediateModelPaths) {
+      const filePathWithoutExt = filePath.replace(FILE_EXTENSION_REGEX, '');
       for (const intermediatePath of options.intermediateModelPaths) {
-        const expectedFileName = intermediatePath.split('/').pop(); // e.g., "-auditboard-model"
-        if (expectedFileName && filePath.includes(expectedFileName)) {
+        const pathSuffix = intermediatePath.split('/').slice(-2).join('/'); // e.g., "core/base-model"
+        if (filePathWithoutExt.endsWith(pathSuffix)) {
           return true;
         }
       }
     }
     if (options?.intermediateFragmentPaths) {
+      const filePathWithoutExt = filePath.replace(FILE_EXTENSION_REGEX, '');
       for (const intermediatePath of options.intermediateFragmentPaths) {
-        const expectedFileName = intermediatePath.split('/').pop(); // e.g., "base-fragment"
-        if (expectedFileName && filePath.includes(expectedFileName)) {
+        const pathSuffix = intermediatePath.split('/').slice(-2).join('/'); // e.g., "fragments/base-fragment"
+        if (filePathWithoutExt.endsWith(pathSuffix)) {
           return true;
         }
       }
@@ -691,13 +694,17 @@ export function findEmberImportLocalName(
     }
 
     // Check if this is a relative import that points to a model file
-    // Skip relative fallback when checking only for fragment sources — isModelFile() is too broad
-    // and would false-positive on regular models. Fragment relative imports are handled by intermediateFragmentPaths.
-    const isFragmentOnlyCheck = expectedSources.length === 1 && expectedSources[0] === FRAGMENT_BASE_SOURCE;
+    // Only use this fallback when checking for model sources — isModelFile() would false-positive
+    // for mixin or fragment source checks. Fragment/mixin relative imports are handled separately.
+    const isModelSourceCheck =
+      expectedSources.length > 1 ||
+      (expectedSources.length === 1 &&
+        expectedSources[0] !== FRAGMENT_BASE_SOURCE &&
+        expectedSources[0] !== DEFAULT_MIXIN_SOURCE);
     if (
       fromFile &&
       baseDir &&
-      !isFragmentOnlyCheck &&
+      isModelSourceCheck &&
       (cleanSourceText.startsWith('./') || cleanSourceText.startsWith('../'))
     ) {
       const resolvedPath = resolveRelativeImport(cleanSourceText, fromFile);
