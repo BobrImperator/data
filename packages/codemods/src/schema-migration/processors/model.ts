@@ -741,7 +741,7 @@ export function generateIntermediateModelTraitArtifacts(
   }
 
   // Build the trait schema object
-  const traitSchemaObject = buildTraitSchemaObject(schemaFields, mixinTraits, { legacyFieldOrder: true });
+  const traitSchemaObject = buildTraitSchemaObject(schemaFields, mixinTraits, { name: traitName, legacyFieldOrder: true });
 
   const traitConfig = createTraitArtifactConfig(
     options,

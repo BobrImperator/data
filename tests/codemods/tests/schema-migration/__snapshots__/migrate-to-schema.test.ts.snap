@@ -1805,10 +1805,10 @@ const ApprovalRequestSchema = {
   ],
   'traits': [
     'base-model',
-    'base-model-trait'
+    'substitute-base-model-trait'
   ],
   'objectExtensions': [
-    'base-model-extension'
+    'substitute-base-model-extension'
   ]
 } satisfies LegacyResourceSchema;
 
@@ -1896,13 +1896,38 @@ export interface BaseModelTrait {
  */
 export interface BaseModel extends WithLegacy<BaseModelTrait> {}
 ",
+  "traits/base.ext.js": "
+import Model from '@ember-data/model';
+import { attr } from '@ember-data/model';
+
+export default class BaseModel extends Model {
+  @attr('string') declare baseModelName: string;
+
+  get kebabd() {
+    return 'base-model-name'
+  }
+}
+
+export class BaseTraitExtension {
+  get kebabd() {
+      return 'base-model-name'
+    }
+}
+
+export default BaseTraitExtension;",
   "traits/base.schema.ts": "
 import type { LegacyResourceSchema } from '@warp-drive/core-types/schema/fields';
 
 import type { BelongsToReference, HasManyReference, Errors } from '@warp-drive/legacy/model/-private';
 
 const BaseTraitSchema = {
-  'fields': []
+  'fields': [
+    {
+      'kind': 'attribute',
+      'name': 'baseModelName',
+      'type': 'string'
+    }
+  ]
 } satisfies LegacyResourceSchema;
 
 export default BaseTraitSchema;
@@ -1927,6 +1952,7 @@ export default BaseTraitSchema;
  */
 export interface BaseTrait {
   id: string | null;
+  baseModelName: string | null;
 }
 
 /**
@@ -1948,6 +1974,7 @@ exports[`migrate-to-schema batch operation > importSubstitutes pointing to inter
   "resources/approval-request.type.ts",
   "traits/",
   "traits/base-model.schema.js",
+  "traits/base.ext.js",
   "traits/base.schema.ts",
 ]
 `;

@@ -15,7 +15,13 @@ import { buildEntityRegistry, linkEntities } from './utils/artifact.js';
 import type { TransformArtifact } from './utils/ast-utils.js';
 import type { ParsedFile } from './utils/file-parser.js';
 import { parseFile } from './utils/file-parser.js';
-import { FILE_EXTENSION_REGEX, TRAILING_SINGLE_WILDCARD_REGEX, TRAILING_WILDCARD_REGEX } from './utils/string.js';
+import {
+  FILE_EXTENSION_REGEX,
+  MODEL_NAME_SUFFIX_REGEX,
+  TRAILING_SINGLE_WILDCARD_REGEX,
+  TRAILING_WILDCARD_REGEX,
+  pascalToKebab,
+} from './utils/string.js';
 
 export type Filename = string;
 export type InputFile = { path: string; code: string };
@@ -239,6 +245,7 @@ export class Codemod {
           this.logger.warn(
             `Could not find source file for importSubstitute '${substitute.import}' at '${substitute.sourcePath}', falling back to static config`
           );
+          this.applyDefaultSubstituteNames(substitute);
           continue;
         }
       } else {
@@ -262,6 +269,7 @@ export class Codemod {
         }
         if (!filePath || !source) {
           this.logger.warn(`Could not find file for import substitute: ${substitute.import}`);
+          this.applyDefaultSubstituteNames(substitute);
           continue;
         }
       }
@@ -340,6 +348,13 @@ export class Codemod {
     }
 
     return allArtifacts;
+  }
+
+  private applyDefaultSubstituteNames(substitute: NonNullable<FinalOptions['importSubstitutes']>[number]): void {
+    if (!substitute.trait) {
+      const baseName = substitute.import.split('/').pop()?.replace(MODEL_NAME_SUFFIX_REGEX, '') || substitute.import;
+      substitute.trait = pascalToKebab(baseName);
+    }
   }
 
   async findModels() {

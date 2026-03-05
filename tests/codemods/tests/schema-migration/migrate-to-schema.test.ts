@@ -1338,8 +1338,15 @@ export default class Simple extends BaseModel {
     prepareFiles(tempDir, {
       'app/core/-base-model.js': `
 import Model from '@ember-data/model';
+import { attr } from '@ember-data/model';
 
-export default class BaseModel extends Model {}
+export default class BaseModel extends Model {
+  @attr('string') declare baseModelName: string;
+
+  get kebabd() {
+    return 'base-model-name'
+  }
+}
 `,
       'app/models/approval-request.ts': `
 import BaseModel from 'test-app/core/-base-model';
@@ -1365,8 +1372,8 @@ export default Mixin.create({});
       importSubstitutes: [
         {
           import: 'test-app/core/-base-model',
-          trait: 'base-model-trait',
-          extension: 'base-model-extension',
+          trait: 'substitute-base-model-trait',
+          extension: 'substitute-base-model-extension',
           sourcePath: join(tempDir, 'app/core/-base-model.js'),
         },
       ],

@@ -106,13 +106,8 @@ export function removeQuotes(text: string): string {
  * Determine AST language from file path
  */
 export function getLanguageFromPath(filePath: string): Lang {
-  if (filePath.endsWith('.ts')) {
-    return AstLang.TypeScript;
-  } else if (filePath.endsWith('.js')) {
-    return AstLang.JavaScript;
-  }
-
-  // Default to TypeScript for unknown extensions
+  // Always use TypeScript parser — it's a superset of JavaScript and correctly
+  // handles TypeScript syntax (e.g. `declare` keyword) that appears in .js files.
   return AstLang.TypeScript;
 }
 
