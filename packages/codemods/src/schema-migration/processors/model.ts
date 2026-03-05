@@ -242,20 +242,16 @@ function extractHeritageInfo(
     const mixinExts = extractMixinExtensions(filePath, options);
     mixinExtensions.push(...mixinExts);
 
+    let matchedIntermediatePaths: string[] = [];
     if (options?.intermediateModelPaths && options.intermediateModelPaths.length > 0) {
-      const intermediateTraits = extractIntermediateModelTraits(
-        heritageClause,
-        root,
-        options.intermediateModelPaths,
-        options
-      );
-      mixinTraits.push(...intermediateTraits);
+      const result = extractIntermediateModelTraits(heritageClause, root, options.intermediateModelPaths, options);
+      mixinTraits.push(...result.traits);
+      matchedIntermediatePaths = result.matchedPaths;
     }
 
     if (options?.importSubstitutes) {
-      const intermediateModelPaths = options.intermediateModelPaths ?? [];
       for (const substitute of options.importSubstitutes) {
-        if (intermediateModelPaths.includes(substitute.import)) {
+        if (matchedIntermediatePaths.includes(substitute.import)) {
           continue;
         }
         const localName = findEmberImportLocalName(root, [substitute.import], options, undefined, process.cwd());
@@ -1165,8 +1161,9 @@ function extractIntermediateModelTraits(
   root: SgNode,
   intermediateModelPaths: string[],
   options?: TransformOptions
-): string[] {
+): { traits: string[]; matchedPaths: string[] } {
   const intermediateTraits: string[] = [];
+  const matchedPaths: string[] = [];
   const extendsText = heritageClause.text();
 
   // Get local names for all intermediate models
@@ -1188,13 +1185,14 @@ function extractIntermediateModelTraits(
         const dasherizedName = pascalToKebab(traitName).replace(TRAILING_MODEL_SUFFIX_REGEX, ''); // Remove trailing -model or model
 
         intermediateTraits.push(dasherizedName);
+        matchedPaths.push(modelPath);
         log.debug(`DEBUG: Found intermediate model trait: ${dasherizedName} from ${modelPath}`);
       }
       break; // Only process the first match since a class can only extend one parent
     }
   }
 
-  return intermediateTraits;
+  return { traits: intermediateTraits, matchedPaths };
 }
 
 /**
